@@ -1,0 +1,320 @@
+---
+title: "Lab 1"
+author: "Nathan Diekema"
+date: "9/22/2021"
+output: 
+  html_document:
+    theme: cosmo
+    fig_height: 6
+    fig_width: 10
+    df_print: paged
+    fig_retina:	2
+    css: "style.css"
+---
+
+***
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align="center", fig.height=5, fig.width=10)
+```
+
+### Loading in the data
+
+```{r, message=FALSE}
+library(readr);
+library(ggplot2);
+q1data <- read_csv("data/q1data.csv");
+q1data <- na.omit(q1data);
+head(q1data);
+theme_set(theme_bw());
+```
+
+## **Task 1**
+Adaption of Gapminder 2010 data visualization.
+
+```{r q1plot, message=FALSE, fig.cap="Figure 1: Adaption of Gapminder 2010 data visualization"}
+
+q1plot <- ggplot(data = q1data, mapping = aes(x = income, y = life_exp, size = population, fill=four_regions)) + 
+  annotate(geom = 'text', 
+           x = median(q1data$income) - 1100, 
+           y = 50, 
+           label = "2010", 
+           color="gray", 
+           size = 75, 
+           alpha = 0.3) +
+  geom_point(color="black", stroke=0.5, shape=21, alpha=0.8) +
+  ylim(10,90) + 
+  scale_fill_manual(values = c("#00AFBB", "#97e424", "#Ee1560", "#E7B800"), name="Region") +
+  scale_size(range = c(1,21), name="Population") +
+  scale_x_continuous(breaks= c(500,1000,2000,4000,8000,16000,32000,64000,128000),
+                     labels=c("500","1000","2000","4000","8000","16k","32k","64k","128k"),
+                     trans='log2') + 
+  ylab("Life Expectancy") +
+  xlab("Income") +
+  theme(legend.position="right",
+        panel.background = element_rect(fill = "white",
+                                colour = "black",
+                                size = 0.3, linetype = "solid"),
+        panel.grid.major = element_line(size = 0.3, linetype = 'solid',
+                                colour = "aliceblue"),
+        panel.grid.minor = element_line(size = 0.3, linetype = 'solid',
+                                colour = "aliceblue")
+        )
+q1plot
+
+```
+
+Q: *What other geometries could you use here besides geom_point? Why is it good or bad for visualizing data?*
+
+A: Another possible geom that could be used is geom_jitter I have graphed the same data as above using geom_jitter as you can see below. The two graphs are nearly identical so it's hard to say which is better. The one thing about the jitter plot is that it adds a small amount of random noise to the data points so the data points on a jitter plot do not exactly represent the data in the data set but it is still close enough to illustrate the data well. From my research, a bubble chart is the best way to effectively display three different continuous variables from a dataset like this so geom_jitter gives another medium of creating a similar bubble chart.
+
+```{r q12plot, message=FALSE, fig.width=10, fig.height=5}
+
+q1bonus <- ggplot(data = q1data, mapping = aes(x = income, y = life_exp, size = population, color=four_regions)) + 
+  annotate(geom = 'text', 
+           x = median(q1data$income) - 1100, 
+           y = 50, 
+           label = "2010", 
+           color="gray", 
+           size = 75, 
+           alpha = 0.3) +
+  geom_jitter(alpha=0.6) +
+  ylim(10,90) + 
+  scale_color_manual(values = c("#00AFBB", "#97e424", "#Ee1560", "#E7B800"), name="Region") +
+  scale_size(range = c(1,21), name="Population") +
+  scale_x_continuous(trans='log2') + 
+  ylab("Life Expectancy") +
+  xlab("Income") +
+  theme(legend.position="right",
+        panel.background = element_rect(fill = "white",
+                                colour = "black",
+                                size = 0.3, linetype = "solid"),
+        panel.grid.major = element_line(size = 0.3, linetype = 'solid',
+                                colour = "aliceblue"),
+        panel.grid.minor = element_line(size = 0.3, linetype = 'solid',
+                                colour = "aliceblue")
+        )
+q1bonus
+
+```
+
+
+## **Task 2**
+Adaption of Gapminder 1997 data visualization.
+
+```{r  message=FALSE}
+q2data <- read_csv("data/q2data.csv");
+q2data <- na.omit(q2data);
+head(q2data)
+```
+
+```{r q2plot, message=FALSE, fig.width=10}
+
+q2plot <- ggplot(data = q2data, mapping = aes(x = exports, 
+                                              y = imports, 
+                                              size = as.numeric(energy), 
+                                              color=four_regions)) + 
+  annotate(geom = 'text', 
+           x = 120, 
+           y = 200, 
+           label = "1997", 
+           color="gray", 
+           size = 65, 
+           alpha = 0.3) +
+  geom_point(alpha=0.8) +
+  scale_color_manual(values = c("#00AFBB", "#97e424", "#Ee1560", "#E7B800"), name="Region") +
+  scale_size(range = c(1,21), name="Population") +
+  xlim(0,240) + 
+  ylim(0,450) + 
+  ylab("Imports (% of GDP)") +
+  xlab("Exports (% of GDP)") +
+  theme(legend.position="right",
+        panel.background = element_rect(fill = "white",
+                                colour = "black",
+                                size = 0.3, linetype = "solid"),
+        panel.grid.major = element_line(size = 0.3, linetype = 'solid',
+                                colour = "aliceblue"),
+        panel.grid.minor = element_line(size = 0.3, linetype = 'solid',
+                                colour = "aliceblue")
+        )
+
+q2plot
+
+```
+
+
+Q: *What other geometries could you use here besides geom_point? Why is it good or bad for visualizing data?*
+
+A: Another possible geom that could be used is geom_jitter I have graphed the same data as above using geom_jitter as you can see below. The two graphs are nearly identical so it's hard to say which is better. The one thing about the jitter plot is that it adds a small amount of random noise to the data points so the data points on a jitter plot do not exactly represent the data in the data set but it is still close enough to illustrate the data well.
+
+```{r q2bonus, message=FALSE, fig.width=10}
+
+q2bonus <- ggplot(data = q2data, mapping = aes(x = exports, 
+                                              y = imports, 
+                                              size = as.numeric(energy), 
+                                              color=four_regions)) + 
+  annotate(geom = 'text', 
+           x = 120, 
+           y = 200, 
+           label = "1997", 
+           color="gray", 
+           size = 65, 
+           alpha = 0.3) +
+  geom_jitter(alpha=0.8) +
+  scale_color_manual(values = c("#00AFBB", "#97e424", "#Ee1560", "#E7B800"), name="Region") +
+  scale_size(range = c(1,21), name="Population") +
+  xlim(0,240) + 
+  ylim(0,450) + 
+  ylab("Imports (% of GDP)") +
+  xlab("Exports (% of GDP)") +
+  theme(legend.position="right",
+        panel.background = element_rect(fill = "white",
+                                colour = "black",
+                                size = 0.3, linetype = "solid"),
+        panel.grid.major = element_line(size = 0.3, linetype = 'solid',
+                                colour = "aliceblue"),
+        panel.grid.minor = element_line(size = 0.3, linetype = 'solid',
+                                colour = "aliceblue")
+        )
+
+q2bonus
+
+```
+
+
+
+## **Task 3**
+Adaption of Gapminder 2001 data visualization.
+
+
+```{r  message=FALSE}
+q3data <- read_csv("data/q3data.csv");
+q3data <- na.omit(q3data);
+head(q3data)
+```
+
+
+
+```{r q3plot, message=FALSE, fig.width=10, fig.height=5}
+
+q3plot <- ggplot(data = q3data, mapping = aes(x = internet_users, 
+                                              y = gdp, 
+                                              size = as.numeric(income), 
+                                              color=four_regions)) + 
+  annotate(geom = 'text', 
+           x = 45, 
+           y = 5000, 
+           label = "2001", 
+           color="gray", 
+           size = 65, 
+           alpha = 0.3) +
+  geom_point(alpha=0.8) +
+  scale_color_manual(values = c("#00AFBB", "#97e424", "#Ee1560", "#E7B800"), name="Region") +
+  scale_size(range = c(1,21), name="Income") +
+  scale_y_continuous(trans='log10') + 
+  ylab("GDP/capita") +
+  xlab("Individuals Using the Internet (% of population)") +
+  theme(legend.position="right",
+        panel.background = element_rect(fill = "white",
+                                colour = "black",
+                                size = 0.3, linetype = "solid"),
+        panel.grid.major = element_line(size = 0.3, linetype = 'solid',
+                                colour = "aliceblue"),
+        panel.grid.minor = element_line(size = 0.3, linetype = 'solid',
+                                colour = "aliceblue")
+        )
+
+q3plot
+
+```
+
+**Q: What other geometries could you use here besides geom_point? Provide an actual plot of another geometry being used here and why it’s good or bad for visualizing these data.**
+
+A: Another possible geom that could be used is geom_jitter I have graphed the same data as above using geom_jitter as you can see below. The two graphs are nearly identical so it's hard to say which is better. The one thing about the jitter plot is that it adds a small amount of random noise to the data points so the data points on a jitter plot do not exactly represent the data in the data set but it is still close enough to illustrate the data well.
+
+
+```{r q3bonus, message=FALSE, fig.width=10, fig.height=5}
+
+q3bonus <- ggplot(data = q3data, mapping = aes(x = internet_users, 
+                                              y = gdp, 
+                                              size = as.numeric(income), 
+                                              color=four_regions)) + 
+  annotate(geom = 'text', 
+           x = 45, 
+           y = 5000, 
+           label = "2001", 
+           color="gray", 
+           size = 65, 
+           alpha = 0.3) +
+  geom_jitter(alpha=0.8) +
+  scale_color_manual(values = c("#00AFBB", "#97e424", "#Ee1560", "#E7B800"), name="Region") +
+  scale_size(range = c(1,21), name="Income") +
+  scale_y_continuous(trans='log10') + 
+  ylab("GDP/capita") +
+  xlab("Individuals Using the Internet (% of population)") +
+  theme(legend.position="right",
+        panel.background = element_rect(fill = "white",
+                                colour = "black",
+                                size = 0.3, linetype = "solid"),
+        panel.grid.major = element_line(size = 0.3, linetype = 'solid',
+                                colour = "aliceblue"),
+        panel.grid.minor = element_line(size = 0.3, linetype = 'solid',
+                                colour = "aliceblue")
+        )
+
+q3bonus
+
+```
+
+
+## **Challenge Points**
+
+For the challenge points I decided to change the assignment of variables from the data used in *Task 3*. I assigned income to the x-axis, internet_users to the y-axis, and gdp/capita as the size of the bubble. 
+
+```{r qchallenge, message=FALSE, fig.width=10, fig.height=5}
+
+qchallenge <- ggplot(data = q3data, mapping = aes(x = gdp, 
+                                              y = income, 
+                                              size = as.numeric(internet_users), 
+                                              color=world_bank_region,
+                                              )) + 
+  annotate(geom = 'text', 
+           x = 6000, 
+           y = 50000, 
+           label = "2001", 
+           color="gray", 
+           size = 65, 
+           alpha = 0.3) + 
+  geom_point(alpha=1) + 
+  scale_size(range = c(1,21), name="Income") + 
+  scale_color_discrete(name="World Bank Region") + 
+  scale_x_continuous(trans='log10') + 
+  ylab("Income") + 
+  xlab("GDP/capita") + 
+  theme(legend.position="right",
+        panel.background = element_rect(fill = "white",
+                                colour = "black",
+                                size = 0.3, linetype = "solid"),
+        panel.grid.major = element_line(size = 0.3, linetype = 'solid',
+                                colour = "aliceblue"),
+        panel.grid.minor = element_line(size = 0.3, linetype = 'solid',
+                                colour = "aliceblue")
+        )
+
+qchallenge
+
+```
+
+**Q1: Is this new graph better or worse than the original? Why?**
+
+A: I personally think this graph is worse than the original because it's more difficult for someone to read it and glean information from it. Also, most of the data points are overlapping which makes it difficult to determine the differences in trends between regions and the sizes of the bubbles themselves don't vary enough to actually make any helpful insights from. Finally, the number of regions has increased from 3 to 7 which end up cluttering the visualization and making it less aesthetically pleasing.
+
+**Q2: For each aesthetic used, write down your best, general advice on what kinds of variables or data would be best displayed using that aesthetic. Try to be as thoughtful and rich as possible. **
+
+A: I used the following aesthetic variables:
+
+  - Position (x & y) - I changed up the *x* and *y* variables for the plot above (but still used all of the same variables from task 3). I personally think the variables I chose for each axis represent the data worse than the original version because having the income and gdp on the x and y axis does not convey quite as much to the viewer as having the GDP vs the % of internet users. The graph still shows the general relationship, but it's definitely harder to read. the x and y trend is going to be the most readily apparent to the viewer so the analyst should put the most important variables on the axes.
+  - Alpha - For data like this, increasing the value of alpha is nice because it allows people to observe ALL data points. This particular data set has a large amount of data points, some of which overlap to the point that you are blocking a number data points from view. For this reason, it is beneficial to make the data points somewhat opaque to make it easier to see the whole picture.
+  - Size - Ideally, the *size* should be used to represent a variable that varies a decent amount between regions. The *internet* variable does not vary quite as much as GDP or income so it makes the size aesthetic of the graph less interesting and insightful to the viewer.
+  - Color - *Color* should be used for a categorical variable such as region. It is important that the number of categories is not too high or else the graph will become cluttered making it more difficult to glean insights from it. In this particular case, I think the number of categories is still reasonable but it looked far better when we used 4 regions instead of 7.
+

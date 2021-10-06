@@ -1,0 +1,102 @@
+---
+title: "Lab 2 Challenge"
+author: "Nathan Diekema"
+date: "10/4/2021"
+output: 
+  prettydoc::html_pretty: 
+    theme: leonids
+    fig_retina:	2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align="center", fig.height=5, fig.width=10)
+```
+
+## Load in and clean data
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+
+hiphop <- read_csv("data/hiphop.csv")
+```
+
+```{r message=FALSE, warning=FALSE}
+
+hiphop_clean <- 
+  hiphop %>% 
+  drop_na(c(ethnic, sex, age)) %>% 
+  mutate_at(vars(ethnic, fam1), as.factor)
+
+
+hiphop_clean
+```
+
+
+**Words that are recognizeable to those who describe themselves as hiphop fans, but less recognizeable to those who do not consider themselves fans**
+
+```{r message=FALSE, warning=FALSE}
+
+## Find words that are recognizable by "fans" of hiphop
+words1 <- 
+  hiphop_clean %>% 
+  select(word, familiarity, hiphop) %>% 
+  filter(hiphop > 3) %>% 
+  group_by(word) %>% 
+  summarize(
+    avg_fam_fans=mean(familiarity)
+  )
+
+## Find words that are recognizable by "fans" of hiphop
+words2 <- 
+  hiphop_clean %>% 
+  select(word, familiarity, hiphop) %>% 
+  filter(hiphop < 2) %>% 
+  group_by(word) %>% 
+  summarize(
+    avg_fam_not_fans=mean(familiarity)
+  )
+
+## Combine the two tables
+compare_words <- left_join(x=words1, y=words2, by="word")
+
+## Add a column with the difference between familiarity
+compare_words %>% 
+  mutate(difference = abs(avg_fam_fans - avg_fam_not_fans)) %>% 
+  arrange(desc(difference))
+
+```
+
+**Words ranked based on familiarity with people that live in the city and who are hiphop fans**
+
+```{r message=FALSE, warning=FALSE}
+popular_words <-
+  hiphop_clean %>% 
+  filter(city >= 50000,
+        hiphop > 3) %>% 
+  group_by(word) %>% 
+  summarize(
+    avg_fam=mean(familiarity)
+  )
+
+popular_words %>% 
+  arrange(desc(avg_fam))
+
+```
+
+
+**Hella Bling Track List**
+
+1. Finna get loose 
+2. What it do (feat. Nicki Minaj)
+3. Make it rain 
+4. Boo thang
+5. You feel me?
+6. Make it rain
+7. Ballin'
+8. A-town girl
+9. You know what it is
+10. Hella chedda
+11. Player hater
+
+For the track names on this album I used some of the words with the highest average familiarity for people who live in decently large cities and who likely consider themselves fans of hiphip. I picked these filters because I figured the people who are most likely going to listen to this album in the first place are those who are fans of hiphop and also the majority of the population lives in cities. I incorporated many of the most familiar words in the track names to appeal to people in this population.
+
