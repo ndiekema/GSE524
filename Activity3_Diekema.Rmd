@@ -1,0 +1,55 @@
+---
+title: "Activity 3"
+author: "Nathan Diekema"
+date: "9/29/2021"
+output: 
+  rmdformats::downcute:
+    lightbox: true
+    self_contained: true
+    gallery: true
+    highlight: github    
+---
+
+```{r setup, includeS=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Part 1
+
+```{r load, message=FALSE, warning=FALSE}
+
+library(tidyverse)
+collegedata <- read_csv("data/colleges_clean.csv")
+head(collegedata)
+```
+
+
+## Part 2
+
+```{r part2, warning=FALSE, messages=FALSE}
+
+colleges_clean <- collegedata %>%
+  select(INSTNM, CITY, STABBR, ZIP, CONTROL, ADM_RATE, SAT_AVG, TUITIONFEE_IN, TUITIONFEE_OUT, UGDS, REGION)%>%
+  mutate(
+    TUITIONFEE_IN = as.numeric(TUITIONFEE_IN),
+    TUITIONFEE_OUT = as.numeric(TUITIONFEE_OUT),
+    SAT_AVG = as.numeric(SAT_AVG),
+    ADM_RATE = as.numeric(ADM_RATE),
+    UGDS = as.numeric(UGDS)
+    ) %>%
+  mutate(
+    CONTROL = as.factor(CONTROL),
+    REGION = as.factor(REGION)
+  )%>%
+  drop_na() %>% 
+  filter(REGION == 1) %>%
+  filter(ADM_RATE < quantile(ADM_RATE, .25)) %>% 
+  filter(TUITIONFEE_IN == TUITIONFEE_OUT) %>% 
+  filter(SAT_AVG %% 2 == 1) %>% 
+  filter(STABBR !="NH", CITY != "Boston") %>% 
+  filter(UGDS/4 >= 3000 * ADM_RATE)  %>% 
+  filter(INSTNM != "Harvard University")
+
+head(colleges_clean)
+
+```
