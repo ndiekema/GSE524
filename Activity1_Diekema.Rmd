@@ -1,0 +1,32 @@
+---
+title: "Activity 1"
+author: "Nathan Diekema"
+date: "9/21/2021"
+output: html_document
+---
+
+### About **Nathan Diekema**
+
+1. I studied **Electrical Engineering** for Undergrad
+2. I have climbed 4 out of the 5 Volcanos in *Washington State*
+3. I am super interested in *deep learning* and *computer vision*. I think it's fascinating how they trained a computer to become the best Go player in the world (properly named AlphaGo)
+    - <https://deepmind.com/research/case-studies/alphago-the-story-so-far>
+
+
+![Figure 1: R Project Directory](folder_screenshot.png)
+
+### Code Demonstration
+
+```{r}
+library(readr);
+gapminder <- read_csv("data/GapMinderData.csv");
+head(gapminder, 5)
+```
+
+
+```{r}
+library(palmerpenguins)
+head(penguins, 5)
+```
+
+

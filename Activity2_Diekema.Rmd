@@ -1,0 +1,179 @@
+---
+title: "Activity 2"
+author: "Nathan Diekema"
+date: "9/23/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r warning=FALSE}
+library(tidyverse)
+library(patchwork)
+collegedata <- read_csv("data/colleges_clean.csv")
+head(collegedata)
+
+```
+
+**1. How many private and public schools are there in your data?**
+
+
+```{r}
+
+plot1 <- ggplot(data=collegedata, aes(x=as.factor(CONTROL), fill=as.factor(CONTROL))) +
+  geom_bar(stat="count") +
+  geom_text(stat="count", aes(label=..count.., vjust=-0.5)) +
+  xlab("Private vs Public") +
+  ylab("Number of Schools")
+
+plot1
+
+```
+
+
+Based on the bar chart above, it can easily be observed that there are 511 public schools and 799 private schools in this dataset
+
+**2. What is the overall average SAT Score?**
+
+```{r}
+
+plot2 <- ggplot(data=collegedata, aes(x=SAT_AVG)) + 
+  geom_boxplot(fill="lightblue") + 
+  ylim(-1,1) + 
+  xlab("Average SAT Score")
+
+plot2
+
+```
+
+
+The box plot above illustrates the average SAT score across all universities in the dataset. The average SAT score is approximately 1130.
+
+
+**3. What is the average SAT score for Private and Public schools?**
+
+
+```{r}
+
+plot3 <- ggplot(data=collegedata, aes(x=as.factor(CONTROL), y=SAT_AVG, fill=as.factor(CONTROL))) +
+  geom_boxplot(alpha=0.5) + 
+  scale_fill_discrete(labels = c("Public", "Private")) +
+  ylab("Average SAT") + 
+  xlab("Public vs Private Schools")
+
+plot3;
+
+mean(data.matrix(collegedata[collegedata$CONTROL==1, "SAT_AVG"]));
+mean(data.matrix(collegedata[collegedata$CONTROL==2, "SAT_AVG"]));
+
+```
+
+The box chart above compares the distrubution of average SAT scores across both public and private universities. The average SAT score for public universities is approximately 1115 and the average for private universities is approximately 1141.
+
+**4. Which school has the largest difference betweeen In- and Out-of-State tuition?**
+
+```{r}
+
+plot4 <- ggplot(data=collegedata, aes(x=as.factor(CONTROL), y=TUITION_DIFF, fill=as.factor(CONTROL))) +
+  geom_boxplot(alpha=0.5) + 
+  scale_fill_discrete(name="School Type", labels = c("Public", "Private")) +
+  ylab("Average SAT") + 
+  xlab("Public vs Private Schools")
+
+plot4
+
+
+```
+
+From the plot above it is clear that the difference between in-state and out-of-state tuition varies far more for public universties than private universities. This makes sense because typically private universities are the same price for both in-state and out-of-state students
+
+**5. Are “better” schools more expensive?**
+
+```{r}
+
+plot5 <- ggplot(data=collegedata, aes(x=TUITIONFEE_IN+TUITIONFEE_OUT/2, y=SAT_AVG), color="lightblue") +
+  geom_point(alpha=0.5) + 
+  scale_color_discrete(name="School Type", labels = c("Public", "Private")) +
+  ylab("Average SAT") + 
+  xlab("Tuition")
+
+plot5
+
+```
+
+I decided to classify "better" universities as ones with higher average SAT scores. With this in mind and with the plot above there is a slight correlation between tuition cost and a "better" education. That being said, there are still quite a few lower cost universities that are just as competitive with the most expensive universities
+
+
+**6. Which states tend to have the “best deals” of colleges?**
+
+```{r q6, fig.width=12, fig.height=6}
+collegedata %>%
+  group_by(STABBR) %>%
+  filter(mean(SAT_AVG) > 1068) %>%
+  filter(mean(TUITIONFEE_IN) < 25000) %>%
+  ggplot(aes(x=STABBR, y=TUITIONFEE_IN, fill=as.factor(STABBR))) +
+  geom_bar(position="dodge", stat="summary", fun="mean") + 
+  scale_fill_discrete(name="State") +
+  ylab("Average In-state Tuition") + 
+  xlab("State")
+
+```
+
+The bar chart above compares the average in-state tuition for every state. As can be observed, Wyoming (WY) has the lowest tuition for schools with an SAT above the mean with Alaska (AK) not far behind. These states have the "best deal" when it comes to college.
+
+**7. Do different regions have different public and private school distributions?**
+
+```{r q7}
+
+plot7 <- ggplot(data=collegedata, aes(x=as.factor(REGION), fill=as.factor(CONTROL))) +
+  geom_bar(position="fill") +
+  scale_fill_discrete(name="Type of School", labels = c("Public", "Private")) +
+  ylab("Count") + 
+  xlab("Region")
+
+plot7;
+
+```
+
+The stacked bar chart above illustrates the distribution (as a percentage) of public to private schools in each region. As you can see each region varies with respect to distribution of type of school. 
+
+
+
+**8. How does the size of the school relate to the cost, correcting for public versus private status?**
+
+```{r q8, fig.width=10, fig.height=5}
+
+plot8 <- ggplot(data=collegedata, aes(x=TUITIONFEE_IN, y=UGDS, color=as.factor(CONTROL))) +
+  geom_point() + 
+  scale_color_discrete(name="Type of School", labels = c("Public", "Private")) +
+  ylab("Size") + 
+  xlab("Tuition Cost")
+
+plot8;
+
+```
+
+The scatter plot above illustrates the relationship between tuition and size of the school. There is a clear trend when comparing public and private schools with respect to these variables. Public schools are generally within the same price range but vary greatly in terms of size. Public schools are typically far larger than private schools. Private schools vary in price far more than public schools and are typically far smaller than public schools.
+
+
+**9. Recreation of plot on worksheet**
+
+```{r q9, fig.width=10, fig.height=6}
+plot9 <- ggplot(data=collegedata, aes(x=as.factor(REGION), y=ADM_RATE, fill=as.factor(CONTROL))) +
+  geom_boxplot() + 
+  scale_fill_discrete(labels = c("Public", "Private")) +
+  ylab("Admission Rate") + 
+  xlab("Region")
+
+plot9;
+
+```
+
