@@ -1,0 +1,116 @@
+---
+title: "Exploration of Cereal Data"
+author: "Nathan Diekema"
+date: "9/30/2021"
+output:
+  prettydoc::html_pretty: 
+    theme: leonids
+---
+## Setup
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, fig.align='center')
+```
+
+```{r libraries, message=FALSE, warning=FALSE}
+library(tidyverse)
+```
+
+
+## The Data
+
+```{r read_data, message=FALSE, warning=FALSE}
+cereals <- read_csv("data/cereals.csv")
+```
+
+```{r check_data, eval = FALSE}
+head(cereals, 10)
+cereals
+```
+
+
+The cereal dataset has 77 unique cereals. Each cereal has variables such as manufacturer, protein, fat, fiber, calories, and more. 
+
+## Data Cleaning and Transformation
+
+```{r}
+cereals <-
+  cereals %>%
+  drop_na()
+
+cereals %>% 
+  summary()
+
+```
+
+
+```{r summarize}
+cereals %>%
+  summarize(across(c(sugars),
+                   list(mean, median, sd)))
+
+```
+
+```{r summarize2}
+#### Write code to show the total calories of all cereals
+cereals %>%
+  summarize(across(c(calories),
+                   list(sum)))
+```
+
+
+```{r mutate}
+#### Write code to create the variable "cal_per_cup" here
+
+cereals <- 
+  cereals %>% 
+  mutate(
+    cal_per_cup = calories/cups
+  )
+summary(cereals)
+
+```
+
+```{r filter_select}
+#### Write code to include only Kellogg brand cereals, and only relevant columns
+
+cereals %>%
+  select(name, mfr, cal_per_cup) %>%
+  filter(mfr == "K")
+
+```
+
+```{r arrange}
+#### Write code to sort the dataset by calories per cup
+cereals %>%
+  arrange(cal_per_cup)
+
+```
+
+```{r wrangle}
+cereals_longer <- cereals %>%
+  select(name, mfr, vitamins, protein, fiber, sugars) %>%
+  pivot_longer(c(sugars, protein, fiber),
+               names_to = "Variable",
+               values_to = "Amount")
+cereals_longer
+
+```
+
+## Visualizing the data
+
+```{r}
+#### Make a plot
+ggplot(data = cereals_longer, mapping = aes(x = mfr, y = Amount, fill = Variable)) +
+  geom_bar(position="dodge", stat="summary")
+
+```
+
+## Conclusion
+
+What did you learn about cereals?  Write a few sentences summarizing your findings, knit your document, and admire your handiwork!
+
+When comparing average protein, fiber, and sugar content between cereal manufacturers, we can make some inferences about how healthy some brands are compared to others. From the chart above it can be observed that Nature's Path is by far the "healthiest" company with the lowest average sugar content, highest average fiber, and decent protein. Kellogs, Post, and General Mills on the other hand have a very high average sugar content and less fiber and protein. This makes sense because these cereal brands are generally known for making popular "sugary" cereals that appeal to younger kids but are not necessarily healthy.
+
+
