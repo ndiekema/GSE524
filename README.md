@@ -1,2 +1,4 @@
 # GSE524
-Computing and Machine Learning for Economics
+Cal Poly GSE524: Computing and Machine Learning for Economics
+
+
