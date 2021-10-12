@@ -1,0 +1,113 @@
+---
+title: "Lab 3: The 12 Days of Christmas"
+author: "Nathan Diekema"
+date: "`r Sys.Date()`"
+output:
+  rmdformats::downcute:
+    lightbox: true
+    self_contained: true
+    gallery: true
+    highlight: tango
+---
+
+```{r setup, include=FALSE}
+## Global options
+knitr::opts_chunk$set(echo = TRUE, fig.align="center", fig.height=5, fig.width=10)
+```
+
+
+### Setup
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(english)
+library(glue)
+xmas <- read.csv("https://www.dropbox.com/s/12ipnczn0fygglt/xmas.csv?dl=1")
+head(xmas)
+```
+
+
+
+
+## Step 1: Make gift phrases
+
+```{r message=FALSE, warning=FALSE}
+make_phrase <- function(num, gift) {
+  if (num == 1) {
+    phrase <- paste("a", gift)
+  } 
+  else {
+    phrase <- paste(english(num), gift)
+  }
+  return(phrase)
+}
+
+# Test
+make_phrase(num = 1, 
+            gift = "partridge in a pear tree")
+
+```
+
+
+```{r message=FALSE, warning=FALSE}
+xmas %>%
+  mutate(
+    Gift_Phrase = make_phrase(Day, Gift.Item)
+  )
+```
+
+## Step 2: Verses
+
+```{r message=FALSE, warning=FALSE}
+
+sing_verse <- function(num, vec_days, vec_gifts) {
+  verse <- glue("On the {vec_days[num]} day of Christmas, my true love sent to me,")
+  long_verse <- ifelse(num>1, TRUE, FALSE)
+  for (i in num:1) {
+    phrase <- make_phrase(i, vec_gifts[i])
+    if (long_verse & i == 1) {
+      phrase <- glue("and {phrase}")
+    }
+    verse <- glue("{verse}
+                  {phrase}")
+
+  }
+  return(verse)
+}
+
+# Test
+sing_verse(5, xmas$Day.in.Words, xmas$Gift.Item)
+
+```
+
+
+## Step 3: Sing the whole song
+
+```{r message=FALSE, warning=FALSE}
+sing_xmas_song <- function(num, vec_days, vec_gifts) {
+
+  song <- map_chr(1:num, ~sing_verse(.x, vec_days, vec_gifts))
+  song <- glue("{glue_collapse(song, sep='\n\n')}")
+
+  return(song)
+}
+
+sing_xmas_song(12, xmas$Day.in.Words, xmas$Gift.Item)
+
+```
+
+
+
+## Step 4: Testing
+
+```{r}
+xmas2 <- read.csv("https://www.dropbox.com/s/tmilnd6ad8k26wy/xmas2.csv?dl=1")
+head(xmas2)
+sing_xmas_song(12, xmas2$Day.in.Words, xmas2$Gift.Item)
+
+```
+
+
+
+
+

@@ -1,0 +1,101 @@
+---
+title: "Lab 3: Challenge"
+author: "Nathan Diekema"
+date: "10/10/2021"
+output:
+  rmdformats::downcute:
+    lightbox: true
+    self_contained: true
+    gallery: true
+    highlight: github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align="center", fig.height=5, fig.width=10)
+```
+
+## Lab 3 Challenge
+
+**Re-write your functions to be pipe-friendly**\
+
+### Setup
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(english)
+library(glue)
+xmas <- read.csv("https://www.dropbox.com/s/12ipnczn0fygglt/xmas.csv?dl=1")
+head(xmas)
+```
+
+### Helper Function
+
+```{r message=FALSE, warning=FALSE}
+make_phrase <- function(num, gift) {
+  if (num == 1) {
+    phrase <- paste("a", gift)
+  } 
+  else {
+    phrase <- paste(english(num), gift)
+  }
+  return(phrase)
+}
+```
+
+### Sing_verse Function
+
+```{r message=FALSE, warning=FALSE}
+
+sing_verse <- function(.data, num, vec_days, vec_gifts) {
+  vec_days <- .data %>% 
+    select({{vec_days}}) %>% 
+    mutate(vec_days = as.vector({{vec_days}})) %>% 
+    .$vec_days
+  
+  vec_gifts <- .data %>% 
+    select({{vec_gifts}}) %>% 
+    mutate(vec_gifts = as.vector({{vec_gifts}})) %>% 
+    .$vec_gifts
+  
+  verse <- glue("On the {vec_days[num]} day of Christmas, my true love sent to me,")
+  long_verse <- ifelse(num>1, TRUE, FALSE)
+  for (i in num:1) {
+    phrase <- make_phrase(i, vec_gifts[i])
+    if (long_verse & i == 1) {
+      phrase <- glue("and {phrase}")
+    }
+    verse <- glue("{verse}
+                  {phrase}")
+
+  }
+  return(verse)
+}
+
+```
+
+
+
+```{r message=FALSE, warning=FALSE}
+xmas %>% 
+  sing_verse(1, Day.in.Words, Gift.Item)
+```
+
+### Sing_xmas_song Function
+
+
+```{r message=FALSE, warning=FALSE}
+sing_xmas_song <- function(.data, num, col_days, col_gifts) {
+  
+  song <- map_chr(1:num, ~sing_verse(.data, .x, {{col_days}}, {{col_gifts}}))
+  song <- glue("{glue_collapse(song, sep='\n\n')}")
+
+  return(song)
+}
+
+```
+
+
+```{r message=FALSE, warning=FALSE}
+xmas %>%
+  sing_xmas_song(12, Day.in.Words, Gift.Item)
+```
