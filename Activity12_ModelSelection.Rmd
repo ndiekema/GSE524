@@ -1,0 +1,183 @@
+---
+title: 'Activity 12: Model Selection'
+author: "Nathan Diekema"
+date: "11/4/2021"
+output:
+  rmdformats::downcute:
+    lightbox: true
+    self_contained: true
+    gallery: true
+    highlight: github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	fig.align = "center",
+	fig.height = 5,
+	fig.width = 10,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+
+## Problem 1
+
+#### 1. Read in the LadyBugs.csv data file into R.
+
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(DT)
+bug_data <- read_csv("data/LadyBugs.csv")
+head(bug_data)
+```
+
+#### 2. Fit three polynomial regression models (of order at least 2, but you choose) to these data.
+
+```{r}
+lm_model <- linear_reg() %>% 
+            set_engine('lm') %>% # adds lm implementation of linear regression 
+            set_mode('regression')
+
+poly3_fit <- lm_model %>% 
+          fit(Lighted ~ poly(Temp, 3), data = bug_data)
+tidy(poly3_fit)
+
+poly4_fit <- lm_model %>% 
+          fit(Lighted ~ poly(Temp, 4), data = bug_data)
+tidy(poly3_fit)
+
+
+poly5_fit <- lm_model %>% 
+          fit(Lighted ~ poly(Temp, 5), data = bug_data)
+tidy(poly3_fit)
+
+```
+
+
+#### 3. Plot all of your models from (2) on top of the data in a new graph.
+
+```{r}
+bug_data %>% 
+  ggplot(aes(x=Temp, y=Lighted)) +
+    geom_point() +
+    geom_smooth(method='lm', se=FALSE, formula=y ~ poly(x, 3), aes(color = "3")) +
+    geom_smooth(method='lm', se=FALSE, formula=y ~ poly(x, 4), aes(color = "4")) +
+    geom_smooth(method='lm', se=FALSE, formula=y ~ poly(x, 5), aes(color = "5")) +
+    scale_colour_manual(name="Poly Degree", values = c("3" = "blue", "4" = "red", "5" = "green"))
+
+```
+
+
+```{r}
+lm_model <- linear_reg() %>% 
+            set_engine('lm') %>% # adds lm implementation of linear regression 
+            set_mode('regression')
+
+poly3_fit <- lm_model %>% 
+          fit(Lighted ~ poly(Temp, 3), data = bug_data)
+
+poly4_fit <- lm_model %>% 
+          fit(Lighted ~ poly(Temp, 4), data = bug_data)
+
+poly5_fit <- lm_model %>% 
+          fit(Lighted ~ poly(Temp, 5), data = bug_data)
+
+```
+
+
+#### 4. Perform k-fold cross-validation with all three of your above models, using k = 5. For each, compute the cross-validation estimate of the test error and the R-squared value. Which model appears best and why?
+
+```{r}
+# ==================================
+# Cross validation with K = 5
+# ==================================
+
+ins_cvs <- vfold_cv(bug_data, v = 5)
+
+poly3_cv <- lm_model %>%
+  fit_resamples(Lighted ~ poly(Temp, 3),
+                resamples = ins_cvs)
+
+poly4_cv <- lm_model %>%
+  fit_resamples(Lighted ~ poly(Temp, 4),
+                resamples = ins_cvs)
+
+poly5_cv <- lm_model %>%
+  fit_resamples(Lighted ~ poly(Temp, 5),
+                resamples = ins_cvs)
+
+poly3_cv %>% collect_metrics()
+poly4_cv %>% collect_metrics()
+poly5_cv %>% collect_metrics()
+ 
+
+```
+
+The 4th degree polynomial model has the lowest value for RMSE and the highest value for R^2 which indicates that it is the best performing predictor out of the three we compared.
+
+
+#### 5. Repeat (4) for k = n (leave-one-out) and k = 10. Are your conclusions the same? How do the results for the different values of k compare to each other?
+
+```{r}
+
+# ==================================
+# Cross validation with K = n
+# ==================================
+
+ins_cvs <- vfold_cv(bug_data, v = nrow(bug_data))
+
+poly3_cv <- lm_model %>%
+  fit_resamples(Lighted ~ poly(Temp, 3),
+                resamples = ins_cvs)
+
+poly4_cv <- lm_model %>%
+  fit_resamples(Lighted ~ poly(Temp, 4),
+                resamples = ins_cvs)
+
+poly5_cv <- lm_model %>%
+  fit_resamples(Lighted ~ poly(Temp, 5),
+                resamples = ins_cvs)
+
+poly3_cv %>% collect_metrics()
+poly4_cv %>% collect_metrics()
+poly5_cv %>% collect_metrics()
+
+# ==================================
+# Cross validation with K = 10
+# ==================================
+
+ins_cvs <- vfold_cv(bug_data, v = 10)
+
+poly3_cv <- lm_model %>%
+  fit_resamples(Lighted ~ poly(Temp, 3),
+                resamples = ins_cvs)
+
+poly4_cv <- lm_model %>%
+  fit_resamples(Lighted ~ poly(Temp, 4),
+                resamples = ins_cvs)
+
+poly5_cv <- lm_model %>%
+  fit_resamples(Lighted ~ poly(Temp, 5),
+                resamples = ins_cvs)
+
+poly3_cv %>% collect_metrics()
+poly4_cv %>% collect_metrics()
+poly5_cv %>% collect_metrics()
+
+```
+
+The results from different values of k differ significantly, the RMSE is much smaller and the R^2 is significantly larger for all models with k = 10. For k=n, there was no value for R^2 reported, but the value for RMSE was even smaller than that of the k=10 cross validation. This makes sense because a higher value for k means the model is exposed to more data during the training process which ultimately allows for a more thorough training, resulting in a more representative model.
+
+
+
+#### 6. The smallest value of k (in cross-validation) is 2; the largest value is n. Explain the strengths and weaknesses of using smaller values of k versus larger values of k.
+
+Using smaller values of k in cross validation will be more efficient than using larger values, especially for larger datasets. However, lower values of k, such as 2, will only be training the model on 50% of the dataset which is not ideal since typically you want to expose your model to as much data as possible when training to achieve the highest performance. Moreover, with higher values of k you will have more unique samples to train/test your data on so the results will be more accurate and less chance of being impacted by outliers. The main strength of using higher values of k is for the accuracy of the results.
+
+
+
+

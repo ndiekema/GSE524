@@ -1,0 +1,189 @@
+---
+title: 'Activity 11: Traditional Regression'
+author: "Nathan Diekema"
+date: "11/2/2021"
+output:
+  rmdformats::downcute:
+    lightbox: true
+    self_contained: true
+    gallery: true
+    highlight: github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	fig.align = "center",
+	fig.height = 5,
+	fig.width = 10,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+## Problem 1
+
+### 1.
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(DT)
+bug_data <- read_csv("data/LadyBugs.csv")
+head(bug_data)
+```
+
+### 3.
+
+```{r}
+bug_data %>% 
+  ggplot(aes(x=Temp, y=Lighted)) +
+    geom_point()
+
+```
+
+From the plot it looks like there is a cubic relationship between lighted and temperature. A linear model would not be a good fit.
+
+### 4.
+
+```{r}
+m1 <- lm(Temp ~ poly(Lighted, 2), data=bug_data); summary(m1)
+m2 <- lm(Temp ~ poly(Lighted, 3), data=bug_data); summary(m2)
+m3 <- lm(Temp ~ poly(Lighted, 4), data=bug_data); summary(m3)
+```
+
+### 5.
+
+```{r}
+bug_data %>% 
+  ggplot(aes(x=Temp, y=Lighted)) +
+    geom_point() +
+    geom_smooth(method='lm', se=FALSE, formula=y ~ poly(x, 2), aes(color = "2")) +
+    geom_smooth(method='lm', se=FALSE, formula=y ~ poly(x, 3), aes(color = "3")) +
+    geom_smooth(method='lm', se=FALSE, formula=y ~ poly(x, 4), aes(color = "4")) +
+    scale_colour_manual(name="Poly Degree", values = c("2" = "blue", "3" = "red", "4" = "green"), labels = c("3", "4", "5"))
+
+```
+
+### 6.
+
+From the model alone it looks like the 3rd degree polynomial is the best fit.
+
+
+### 7.
+
+```{r collapse=T}
+#Model 1
+summary(m1)$r.squared      # R^2
+sqrt(mean(m1$residuals^2)) # RMSE
+#Model 2
+summary(m2)$r.squared
+sqrt(mean(m2$residuals^2))
+# Model 3
+summary(m3)$r.squared
+sqrt(mean(m3$residuals^2))
+```
+
+With respect to the goodness-of-fit measure R^2 and RMSE, Model 3 (Poly(4)) is superior.
+
+### 8.
+
+```{r}
+summary(m3)$r.squared
+```
+The R^2 value for Model 3 is 0.321. RThe R^2 value represents the proportion of the variance for a dependent variable that's explained by an independent variable in a regression model. Thus, Model 3 can explain approx. 32% of the datapoints in the set.
+
+### 9.
+
+I think that the training accuracy would increase, approaching 100% accuracy. The testing accuracy would maybe increase a little at first but eventually it will decrease as the degree increases. This is because as the degree of the polynomial increases the model will become way overfitted to the testing data so that when it is eventually tested on the new data in the testing dataset it will not be a good model to represent the general trend of the data.
+
+
+## Problem 2
+
+### 1.
+
+```{r}
+library(ISLR)
+m1 <- lm(Sales ~ Price + Urban + US, data = Carseats)
+summary(m1)
+head(Carseats)
+```
+
+### 2.
+
+- Price: The *price* of a carseat decreases by -0.05 on average for every one-thousand sales.
+- UrbanYes: There are -0.02 thousand less sales in *Urban* areas
+- USYes: There are 1.2 thousand more sales in the *US* than outside the US.
+
+
+### 3.
+
+\[
+\begin{eqnarray}
+Sales \sim & \beta_0 + \beta_1Price + \beta_2Urban + \beta_3US\
+\end{eqnarray}
+\]
+
+
+### 4. 
+
+Yes, both price and US are significant predictors of sales. Both of these predictors have very small p-values which means they are helpful in predicing sales.
+
+### 5. 
+
+You can reject the null hypothesis for the *Urban* predictor. The p-value was 0.936 which indicates that this variable does not have a significant impact on the prediction of sales.
+
+
+### 6.
+
+The *Urban* variable had a p-value of 0.936 which is very high which means the variable is not significant at the 5% level.
+
+### 7. 
+
+```{r}
+m1_reduced <- lm(Sales ~ Price + US, data=Carseats)
+summary(m1_reduced)
+```
+
+
+### 8. 
+
+```{r}
+# Adjusted R^2
+data.frame(
+  Model1 = summary(m1)$adj.r.squared,
+  Model1_Reduced = summary(m1_reduced)$adj.r.squared
+  )
+
+```
+
+The adjusted R^2 for the original model in part 1 was 0.2335 whereas the reduced model had a slightly better adjusted R^2 of 0.2354.
+
+
+### 9. 
+
+
+```{r}
+max(residuals(m1_reduced))
+```
+There are outliers, as there are in any model. However, based on the residual standard error reported from the summary of the reduced model (2.469) they do not have a serious impact on the the coefficient estimates
+
+
+### 10.
+
+```{r}
+df <- data.frame(Rsq = c(summary(m1)$r.squared, summary(m1_reduced)$r.squared),
+           AdjRsq = c(summary(m1)$adj.r.squared, summary(m1_reduced)$adj.r.squared)
+           )
+rownames(df) <- c("Model1", "Model1_Reduced")
+df
+```
+
+
+As discussed earlier, the adjusted R^2 is slightly better for the reduced model. The R^2 is essentially the same for both models. That being said, you are generally not supposed to compare the normal R^2 of models with a varying number explanatory variables. Although these models seem to have very similar performance based on these measures, the reduced model is a slightly better predictor for this dataset. These comparisons match our earlier conclusions.
+
+
+
+
+
+
