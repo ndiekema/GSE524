@@ -1,0 +1,340 @@
+---
+title: "Lab 4: Webscraping & Data Wrangling"
+author: "Nathan Diekema"
+date: "`r Sys.Date()`"
+output:
+  rmdformats::downcute:
+    lightbox: true
+    self_contained: true
+    gallery: true
+    highlight: github
+---
+
+
+```{r setup, include=FALSE}
+## Global options
+knitr::opts_chunk$set(echo = TRUE, fig.align="center", fig.height=5, fig.width=10)
+```
+
+### Import Packages
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(rvest)
+library(XML)
+```
+
+## Coffee Lovers Unite!
+
+If caffeine is one of the most popular drugs, then coffee is likely one of the most popular delivery systems for it. Aside from caffeine, people enjoy the wonderful variety of coffee-related drinks. Let’s do a rough investigation of the “market share” by some of the top coffee chains in the United States!
+
+The menuism.com website provides a great collection of data on store locations and chain prevalence. Check out this page for the Starbucks Coffee locations in the United States. Notice that this page only really gives the name of the state and the number of locations in that state. A similarly formatted page is available for many other coffee chains.
+
+
+## Scrape the Location Counts
+
+
+1. **Use the rvest package to scrape the data (from menuism.com) on state names and corresponding number of store locations, for the following chains:**\
+
+
+```{r message=FALSE, warning=FALSE}
+
+# Function for scraping data
+scrape_data <- function(url, range, name) {
+  link <- read_html(url)
+  html <- html_nodes(link, css=".list-unstyled-links a")
+  text <- html_text(html)[range]
+  text <- text %>% 
+    str_replace(name, "") %>% 
+    str_replace("locations", "") %>% 
+    str_replace_all("[()]" , "")
+  return(text)
+}
+
+## Starbucks
+url <- "https://www.menuism.com/restaurant-locations/starbucks-coffee-39564"
+text <- scrape_data(url, 1:51, "Starbucks Coffee")
+
+coffee <- data.frame(
+  state = str_extract(text, "[^[:digit:]]+"),
+  starbucks = as.numeric(str_extract(text, "[:digit:]+"))
+)
+
+## Dunkin' Donuts
+url <- "https://www.menuism.com/restaurant-locations/dunkin-donuts-181624"
+text <- scrape_data(url, 1:45, "Dunkin' Donuts")
+
+df2 <- data.frame(
+  state = str_extract(text, "[^[:digit:]]+"),
+  dunkin_donuts = as.numeric(str_extract(text, "[:digit:]+"))
+)
+coffee <- left_join(coffee, df2)
+
+
+## Peet's
+url <- "https://www.menuism.com/restaurant-locations/peets-coffee-tea-84051"
+text <- scrape_data(url, 1:9, "Peet's Coffee & Tea")
+
+df2 <- data.frame(
+  state = str_extract(text, "[^[:digit:]]+"),
+  peets_coffee = as.numeric(str_extract(text, "[:digit:]+"))
+)
+coffee <- left_join(coffee, df2)
+
+## Tim Horton's
+url <- "https://www.menuism.com/restaurant-locations/tim-hortons-190025"
+text <- scrape_data(url, 1:16, "Tim Hortons")
+
+df2 <- data.frame(
+  state = str_extract(text, "[^[:digit:]]+"),
+  tim_hortons = as.numeric(str_extract(text, "[:digit:]+"))
+)
+coffee <- left_join(coffee, df2)
+
+## Panera Bread
+url <- "https://www.menuism.com/restaurant-locations/panera-bread-4258"
+text <- scrape_data(url, 1:47, "Panera Bread")
+
+df2 <- data.frame(
+  state = str_extract(text, "[^[:digit:]]+"),
+  panera_bread = as.numeric(str_extract(text, "[:digit:]+"))
+)
+coffee <- left_join(coffee, df2)
+
+## Caribou Coffee
+url <- "https://www.menuism.com/restaurant-locations/caribou-coffee-164861"
+text <- scrape_data(url, 1:20, "Caribou Coffee")
+
+df2 <- data.frame(
+  state = str_extract(text, "[^[:digit:]]+"),
+  caribou_coffee = as.numeric(str_extract(text, "[:digit:]+"))
+)
+coffee <- left_join(coffee, df2)
+
+## Au Bon Pain
+url <- "https://www.menuism.com/restaurant-locations/au-bon-pain-69342"
+text <- scrape_data(url, 1:22, "Au Bon Pain")
+
+df2 <- data.frame(
+  state = str_extract(text, "[^[:digit:]]+"),
+  au_bon_pain = as.numeric(str_extract(text, "[:digit:]+"))
+)
+coffee <- left_join(coffee, df2)
+
+## The Coffee Bean & Tea Leaf
+url <- "https://www.menuism.com/restaurant-locations/the-coffee-bean-tea-leaf-165988"
+text <- scrape_data(url, 1:8, "The Coffee Bean & Tea Leaf")
+
+df2 <- data.frame(
+  state = str_extract(text, "[^[:digit:]]+"),
+  the_coffee_bean = as.numeric(str_extract(text, "[:digit:]+"))
+)
+coffee <- left_join(coffee, df2)
+
+## McDonald’s
+url <- "https://www.menuism.com/restaurant-locations/mcdonalds-21019"
+text <- scrape_data(url, 1:51, "McDonald's")
+
+df2 <- data.frame(
+  state = str_extract(text, "[^[:digit:]]+"),
+  mcdonalds = as.numeric(str_extract(text, "[:digit:]+"))
+)
+coffee <- left_join(coffee, df2)
+
+head(coffee, 10)
+```
+
+
+2. **Write a function stateabb() that takes a state name (assume it’s spelled correctly) and converts it to its state abbreviation. This can be a very simple function.**\
+
+```{r message=FALSE, warning=FALSE}
+# Write Function
+stateabb <- function(state) {
+  return(state.abb[match(state, state.name)])
+}
+
+```
+
+
+
+3. **Parse, merge and tidy your data so that you have a row for each state and two columns: state abbrevation, location count.**\
+
+```{r message=FALSE, warning=FALSE}
+
+# Remove extra spaces from state string
+# Add the state_abbr column
+coffee <- coffee %>% 
+  mutate(state = str_replace(state, "[:blank:]+$", "")) %>% 
+  filter(!is.na(stateabb(state))) %>% 
+  mutate(state_abbr = stateabb(state))
+
+
+# Move the state_abbr to the front of the df
+coffee <- coffee[, c(1,11,2:10)]
+
+# Convert all NAs to zeros
+coffee[is.na(coffee)] = 0
+
+# Pivot dataset
+coffee <- pivot_longer(coffee, starbucks:mcdonalds, names_to="company", values_to="location_count")
+
+head(coffee, 10)
+
+```
+
+
+## Supplemental Data
+
+
+4. **Scrape the state names and populations from this wikipedia page. Convert the state names to abbreviations and merge these data with your coffee dataset.**\
+
+```{r message=FALSE, warning=FALSE}
+
+url <- "https://simple.wikipedia.org/wiki/List_of_U.S._states_by_population"
+pop_html <- html_nodes(read_html(url), css="td:nth-child(4) , td:nth-child(3)")
+pop_text <- html_text(pop_html)
+
+pop_text <- pop_text %>% 
+  str_replace_all("[,\n]" , "") %>% 
+  str_replace("^[:blank:]+", "")
+
+state_pop <- data.frame(
+  state = pop_text[seq(1, length(pop_text), by=2)],
+  population = pop_text[seq(2, length(pop_text), by=2)]
+  ) %>% 
+  filter(!is.na(stateabb(state))) %>% 
+  mutate(population = as.numeric(population))
+
+# Check output
+head(state_pop, 10)
+
+# Merge tables
+coffee <- left_join(coffee, state_pop)
+
+head(coffee,10)
+```
+
+5. **Find the revenue, stock price, or your financial metric of choice for each of the companies listed above (if you can find a website to scrape these from that’s great!…but it’s okay if you manually enter these into R). Merge these values into your big dataset. Note: these values may be repeated for each state.**
+
+```{r message=FALSE, warning=FALSE}
+
+stock_price <- rbind(
+  data.frame(company="starbucks",stock_price=111.45),
+  data.frame(company="dunkin_donuts",stock_price=106.5),
+  data.frame(company="peets_coffee",stock_price=24.94),
+  data.frame(company="tim_hortons",stock_price=99.45),
+  data.frame(company="panera_bread",stock_price=316.21),
+  data.frame(company="caribou_coffee",stock_price=14),
+  data.frame(company="au_bon_pain",stock_price=6.25),
+  data.frame(company="the_coffee_bean",stock_price=17.41),
+  data.frame(company="mcdonalds",stock_price=242.25)
+)
+stock_price
+
+# Stock Prices
+coffee <- left_join(coffee, stock_price, by="company")
+coffee
+
+```
+
+6. **Create a region variable in your dataset according to the scheme on this wikipedia page: Northeast, Midwest, South, West. You do not need to scrape this information.**
+
+```{r message=FALSE, warning=FALSE}
+url <- "https://en.wikipedia.org/wiki/List_of_regions_of_the_United_States"
+reg_html <- html_nodes(read_html(url), css="ul:nth-child(9) li")
+reg_text <- html_text(reg_html)
+
+reg_text <- reg_text[str_detect(reg_text, "Region")] %>% 
+  str_replace("Region [0-9]: ", "") %>% 
+  str_replace_all("Division [0-9]:", "") %>% 
+  str_replace_all("[,\n]" , "") %>% 
+  str_replace("^[:blank:]+", "") %>% 
+  str_replace("Washington D.C.", "")
+
+
+region <- function(reg_text, state) {
+  return(str_extract(reg_text[str_detect(reg_text, state)],"^[:alpha:]+"))
+}
+
+coffee <- coffee %>% 
+  mutate(
+    region = map_chr(state, function(x) region(reg_text, x))
+  )
+
+coffee <- coffee[, c(1:2,7,3:6)]
+
+# Check output
+head(coffee, 10)
+
+```
+
+
+
+## Analyze
+
+7. **Assess and comment on the prevalence of each chain.**\
+
+
+```{r message=FALSE, warning=FALSE}
+
+coffee %>% 
+  group_by(region) %>% 
+  summarize(
+    total_population = sum(population)/9
+  )
+
+coffee %>% 
+  group_by(company) %>% 
+  summarize(
+    num_locations = sum(location_count)
+  ) %>% 
+  arrange(desc(num_locations))
+
+coffee %>% 
+  ggplot(aes(region, location_count, fill=company)) +
+  geom_bar(stat="identity") +
+  labs(title = "Distribution of each chain by region",
+       x = "Region", y = "Distribution") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+coffee %>% 
+  ggplot(aes(company, location_count,fill=company)) + 
+  geom_bar(stat="identity", show.legend = F) +
+  coord_flip() +
+  labs(title="Number of locations by company",
+       x="Company", y="Num locations") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+
+coffee %>% 
+  group_by(region, company) %>% 
+  summarize(num_locations=sum(location_count)) %>% 
+  arrange(company, desc(num_locations))
+
+```
+
+**Some observations:**
+
+- Mcdonald's is undoubtedly the largest chain the in United States compared to the others. There are 16,744 McDonalds in the United States, with nearly half of those being in the South region.
+- Starbucks is the second largest chain with 10,222 locations across the 50 states.
+- Peet's is the smallest chain with only 197 locations nationwide.
+- Starbucks is definitely more prevalent in the West than in any other region. In fact, there are more Starbucks in the Western region than there are McDonalds (or any other company).
+- Dunkin' Donuts is the 3rd largest coffee chain out of the 9 examined, and is most popular in the NorthEast region. Interestingly, there are not very many Dunkin' Donuts in the West.
+- Peet's Coffee and The Coffee Bean only exist in the Western region. Caribou Coffee is most prevalent in the Midwest and does not have any stores in the Northeast or West. Tim Horton's does not have many stores outside of the Midwest/Northeast.
+- Both Mcdonald's and Starbucks have locations in every single state. McDonald's has the most stores in California (1623) and Texas (1303). Starbucks has the most locations in California (2362, wow), Texas (634), and Washington (634).
+- Panera bread is relatively evenly spread out across the United States with the most locations in Florida (227) and California (216). Panera is definitely the least polarized by region and seems to be popular in every region
+- It makes sense that the stock price of McDonalds, Starbucks, Dunkin' Donuts, and Panera are all relatively high. That being said, stock price is actually not a very helpful metric and isn't great when comparing the success of businesses.
+
+- Most prevalent regions for each company:
+  - McDonald’s: South (6606)
+  - Starbucks: West (4414)
+  - Dunkin’ Donuts: Northeast (3871)
+  - Panera Bread: South (805)
+  - Caribou Coffee: Midwest (520)
+  - Tim Horton’s: Midwest (309)
+  - The Coffee Bean & Tea Leaf: West (239)
+  - Peet’s Coffee & Tea: West (190)
+  - Au Bon Pain: Northeast (184)
+
+
+

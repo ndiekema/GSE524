@@ -1,0 +1,89 @@
+---
+title: 'Lab 4: Challenge'
+author: "Nathan Diekema"
+date: "10/17/2021"
+output:
+  rmdformats::downcute:
+    lightbox: true
+    self_contained: true
+    gallery: true
+    highlight: github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.align="center", fig.height=5, fig.width=10)
+```
+
+### Import Packages
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(rvest)
+library(XML)
+library(DT)
+```
+
+
+```{r message=FALSE, warning=FALSE}
+
+# Function for converting state name to abbreviation
+stateabb <- function(state) {
+  return(state.abb[match(state, state.name)])
+}
+
+# Function for scraping data, outputs a dataframe
+scrape_data <- function(url) {
+  link <- read_html(url)
+  html <- html_nodes(link, css=".list-unstyled-links a")
+  text <- html_text(html)
+  company <- html_text(html_nodes(link, css=".restaurant-title span"))
+  
+  text <- text %>% 
+    str_replace(paste(company, "locations"), "") %>% 
+    str_replace_all("[()]" , "")
+  
+  company <- company %>% 
+    str_to_lower() %>% 
+    str_replace_all(" ", "_")
+  
+  df <- data.frame(
+    state = stateabb(str_extract(text, ".*(?=\\s{2})")),
+    company = company,
+    location_count = as.numeric(str_extract(text, "[:digit:]+$"))
+  ) %>% drop_na(state)
+  
+  return(df)
+}
+
+# === Test ===
+
+# Starbucks
+url <- "https://www.menuism.com/restaurant-locations/starbucks-coffee-39564"
+datatable(
+  scrape_data(url)
+)
+
+## Dunkin' Donuts
+url <- "https://www.menuism.com/restaurant-locations/dunkin-donuts-181624"
+datatable(
+  scrape_data(url)
+)
+
+# The Coffee Bean and Tea Leaf
+url <- "https://www.menuism.com/restaurant-locations/the-coffee-bean-tea-leaf-165988"
+datatable(
+  scrape_data(url)
+)
+## Panera Bread
+url <- "https://www.menuism.com/restaurant-locations/panera-bread-4258"
+datatable(
+  scrape_data(url)
+)
+## Au Bon Pain
+url <- "https://www.menuism.com/restaurant-locations/au-bon-pain-69342"
+datatable(
+  scrape_data(url)
+)
+```
+
+

@@ -1,0 +1,338 @@
+---
+title: 'Lab5: Midterm Practice'
+author: "Nathan Diekema"
+date: "10/21/2021"
+output:
+  rmdformats::downcute:
+    lightbox: true
+    self_contained: true
+    gallery: true
+    highlight: github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	fig.align = "center",
+	fig.height = 5,
+	fig.width = 10,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+
+```{r include=FALSE}
+library(tidyverse)
+library(DT)
+min_wage <- read_csv("data/min_wage.csv")
+```
+
+## Part 1: General R Questions
+
+
+**1. In Week 1, you were asked to consider the relationship between private companies and open-source community. In a short paragraph (3-5 sentences), share your thoughts on this topic as it relates to R, RStudio, and the R community.**
+
+
+Both R and RStudio are open-source for all individuals. R has a large community that contributes by creating helpful packages, documentation, programs, and more; all of which can be freely accessed by everyone. RStudio makes money by providing and developing professional products to larger corporations, which in turn allows RStudio to continue developing packages, updating the IDE, and to keep it free for everyone. I think open-source software is beneficial to the entire community because it encourages innovation, collaboration, and unites everybody around improving the software and finding solutions to problems. This leads to the creation of effective solutions at a faster rate. Moreover, as with R and other open-source languages, there are a plethora of libraries to choose from which allows you to approach a problem with numerous approaches. The open-sources community is also very helpful and quick to answer questions when addressing issues on online forums.
+
+
+**2. Which of the following is an accurate statement about a?**
+
+```{r eval=FALSE, include=FALSE}
+a <- 10
+is.vector(a)
+is.atomic(a)
+is.numeric(a)
+typeof(a)
+length(a)
+a + c(1,4,7)
+as.character(a)
+```
+
+1. True
+2. True
+3. False
+4. True
+5. False
+6. True
+ 
+
+**3. What object structure is mystery_object?**
+
+```{r eval=FALSE, include=FALSE}
+mystery <- matrix(1:9, nrow = 3, ncol = 3)
+str(mystery)
+mystery <- as.vector(mystery)
+str(mystery)
+mystery <- data.frame(c(1,2,3),c(4,5,6))
+str(mystery)
+```
+
+mystery_object is a **Matrix**
+
+
+**4. Suppose student_names is a character vector containing the names of students in a particular class. For example, one entry of student names might be Brad Pitt, and another might be Jeffrey Armstrong. You may assume there are no middle names or two-word first or last names.)**\
+
+**What object will be returned by `str_extract(")?**
+
+A character array containing the first letter of every name.
+
+
+**Which of the following will return the full names of students whose first name starts with a K?**
+
+```{r, collapse=TRUE}
+student_names <- c("George Lopez", "Karen Doodaa", "Kevin Gates", "Luke Alfonzo")
+str_extract(student_names, "")
+str_extract(student_names, "^K")
+str_extract(student_names, "^K.*")
+str_extract(student_names, "^K[a-z]*")
+str_extract(student_names, "K[a-z]* ")
+str_subset(student_names, "^K")
+str_subset(student_names, "^K.*")
+str_subset(student_names, "^K[a-z]*")
+str_subset(student_names, "K[a-z]* ")
+```
+
+- str_extract(student_names, "^K.*")  (This one is not ideal because it returns a vector with NAs in addition to the names)
+- str_subset(student_names, "^K")
+- str_subset(student_names, "^K.*")
+- str_subset(student_names, "^K[a-z]*")
+- str_subset(student_names, "K[a-z]* ")
+
+
+**5. What would be the most reasonable code to put in the #?????? part?**
+
+```{r}
+vectorify <- function(x) {
+  
+  if (length(x) == 1) {
+    x <- rep(x, 10)
+  } 
+  else {
+    stop("x must be length 1")
+  }
+  return(x)
+}
+```
+
+I think that stop("x must be length 1") is the best option inside the else{} statement because the function seems as if it is supposed to only takes in a single number and turn it into a length-10 vector. The stop() function will immediately return an error and stop the program if it is used incorrectly which will make it hard to misuse and reduce debugging time.
+
+
+
+## Part 2: Write Functions
+
+**Write a function called `get_footnotes` that returns the footnotes as a list of string vectors**
+
+```{r}
+vec <- c("1.01 - 1.02 (b)", "4.24 - 6.7 (c,b)", "1.5 (a) - 2.4 (d-f)")
+
+get_footnotes <- function(vec) {
+  x <- str_extract_all(vec, "\\([^()]+\\)")
+  return(x)
+}
+
+get_footnotes(vec)
+
+```
+
+
+**2. Write a function called `get_nums` that returns the first and last numbers as a data frame, for example:**
+
+```{r}
+get_nums <- function(vec) {
+  x <- str_extract_all(vec, "\\d+\\.*\\d*")
+  df <- data.frame(first_numbers = unlist(map(x,1)),
+                   last_numbers = vapply(x, tail, n = 1L, FUN.VALUE = character(1)))
+  return(df)
+}
+get_nums(vec)
+```
+
+
+
+## Part 3: Short Answer
+
+**1. How many entries in this dataset had footnote (b)?**
+
+```{r}
+min_wage %>% 
+  filter(Footnote=="(b)") %>% 
+  count()
+
+```
+
+**80** entries have the footnote "(b)"
+
+**2. Which states had the highest and lowest minimum wage in each year? (Use the High.Value dollar amount, not adjusted for inflation.)**
+
+```{r}
+# States with Highest Min Wage
+high <- min_wage %>% 
+  select(Year, State, High.Value) %>% 
+  drop_na(High.Value) %>% 
+  group_by(Year) %>% 
+  slice_max(High.Value)
+
+datatable(high)
+
+# States with Lowest Min Wage
+low <- min_wage %>% 
+  select(Year, State, High.Value) %>% 
+  drop_na(High.Value) %>% 
+  group_by(Year) %>% 
+  slice_min(High.Value)
+
+datatable(low)
+
+```
+
+**3. Which states had the largest change in minimum wage (difference between high and low values) in each year?**
+
+```{r}
+change <- min_wage %>% 
+  select(Year, State, High.Value, Low.Value) %>% 
+  mutate(
+    diff = High.Value - Low.Value
+  ) %>% 
+  group_by(Year) %>% 
+  slice_max(diff)
+
+datatable(change)
+```
+
+**4. Consider only Texas and California. Make a plot comparing their minimum wage in 2018 dollars (Low.2018) over time:**
+
+```{r}
+min_wage %>% 
+  filter(State == "California" | State == "Texas") %>% 
+  ggplot( aes(x=Year, y=Low.2018, group=State, color=State)) +
+    geom_line() +
+    labs(title="Min Wage in Texas vs California") +  
+    theme(plot.title = element_text(hjust = 0.5))
+```
+
+**5. Create a new data frame with the following properties:**
+
+
+```{r}
+df <- min_wage %>% 
+  select(Year, State, High.2018) %>% 
+  pivot_wider(names_from = State, values_from = High.2018)
+
+datatable(df)
+```
+
+
+
+## Part 4: Open-Ended Analysis
+
+Every state will be split up into four regions (Northeast, Midwest, South, West) as specified [here](https://en.wikipedia.org/wiki/List_of_regions_of_the_United_States). We will be comparing trends in minimum wage between each of these regions.
+
+```{r}
+# Scrape the region data off Wikipedia and add it to the dataset
+library(rvest)
+url <- "https://en.wikipedia.org/wiki/List_of_regions_of_the_United_States"
+reg_html <- html_nodes(read_html(url), css="ul:nth-child(9) li")
+reg_text <- html_text(reg_html)
+
+reg_text <- reg_text[str_detect(reg_text, "Region")] %>% 
+  str_replace("Region [0-9]: ", "") %>% 
+  str_replace_all("Division [0-9]:", "") %>% 
+  str_replace_all("[,\n]" , "") %>% 
+  str_replace("^[:blank:]+", "") %>% 
+  str_replace("Washington D.C.", "")
+
+region <- function(reg_text, state) {
+  return(str_extract(reg_text[str_detect(reg_text, state)],"^[:alpha:]+"))
+}
+
+stateabb <- function(state) {
+  return(state.abb[match(state, state.name)])
+}
+
+min_wage <- min_wage %>% 
+  filter(!is.na(stateabb(State))) %>% 
+  mutate(
+    Region = as.factor(map_chr(State, function(x) region(reg_text, x)))
+  )
+
+```
+
+```{r}
+# Average minimum wage for each region
+min_wage %>% 
+  group_by(Region) %>% 
+  summarize(
+    avg_wage = mean(Low.2018)
+  )
+
+
+#Average minimum wage in 1968 vs 2017
+min_wage_avg_1968 <- min_wage %>% 
+  filter(Year == 1968) %>% 
+  group_by(Region) %>% 
+  summarize(
+    avg_wage_1968 = mean(Low.2018)
+  )
+
+min_wage_avg_2017 <- min_wage %>% 
+  filter(Year == 2017) %>% 
+  group_by(Region) %>% 
+  summarize(
+    avg_wage_2017 = mean(Low.2018),
+  )
+
+left_join(min_wage_avg_1968, min_wage_avg_2017, by="Region") %>% 
+  mutate(
+    diff = avg_wage_2017 - avg_wage_1968
+  )
+```
+
+The tables above show the mean minimum wage with respect to each region compared between 1968 and 2017. The difference between these wages is shown in the right-most column named diff. These means were calculated from the Low.2018 column which adjusts for inflation and is an estimate of how much the wages were relative to the dollar value in 2018. From this table we can glean general information about how much the wage has changed in each region over the past 50 years. The south has the lowest average minimum wage by a large margin in both the years 1968, and 2017. Part of the reason for the low average is the fact that many southern states do not have a minimum wage law at the state level which drags down the average. That being said, the South has seen an increase in minimum wage by $2.28 in the past 50 years. 
+
+The Midwest has seen the biggest change in minimum wage throughout this time frame with an average increase of \$3.55.This puts the minimum wage in the Midwest at \$8.06 in 2017 which is competitive with the Northeast and West regions. The Northeast region had the highest minimum wage in 1968 and still does in 2017. The West is not far behind the Northeast with the second highest minimum wages in both years by a large margin. However, although the West and Northeast have the highest minimum wage, they have seen the least growth. In fact, the Northeast actually has a lower minimum wage now than it did 50 years ago (with respect to the 2018 dollar value). 
+
+
+**Avg minimum wage for every region from 1968-2017**\
+
+```{r}
+min_wage %>% 
+  group_by(Year, Region) %>% 
+  summarize(mean_wage = mean(Low.2018)) %>% 
+  ggplot( aes(x=Year, y=mean_wage, group=Region, color=Region)) +
+    geom_line() +
+    labs(title="Average Min Wage in Every Region") +  
+    theme(plot.title = element_text(hjust = 0.5))
+```
+
+The plot above shows the trends for average minimum wage (relative to the dollar value in 2018) in each region from 1968 to 2017. From this plot we can assert what we found in the tables above. The Northeast region had the highest avg min wage for the entire time span shown. However, the minimum wage in the Northeast region has not kept up with inflation and is in fact lower now than it was in 1968. The West has a similar trend to the Northeast but is always slightly lower than the Northeast - it has also not increased much since 1968. As we noted earlier, the Midwest has the most change from 1968 to 2017 and has a very clear upwards trend. By 2017, the average min wage of the Northeast, Midwest, and West are all relatively close to each other in value. The Southern region, on the other hand, has the lowest mean wage by a wide margin. Although minimum wages in the South do increase slightly, the mean is still significantly lower than the wages in the other three regions in 2017. 
+
+In terms of some other patterns in the graph, it is interesting how the minimum wage radically fluctuates in certain years. For instance, in 1975 the min wage in every region dips significantly and then rebounds the next year. A similar phenomenon happens in the late 1980s and mid 2000s. Moreover, all of the regions experience a downtrend from the mid-1970s to the 1990s. These dips and downtrends could be attributed to political events, new policies or laws, a recession or economic crisis, or just a lack of attention. The information gleaned from a quick Google search about U.S. history points to the main culprit being economic recessions. There were notable recessions from 1973-1975, 1981-1982, and 2007-2009, all of which line up with the fluctuations in minimum wage.
+
+
+**Change in minimum wage based on region**
+
+```{r}
+min_wage %>% 
+  select(Year, State, High.Value, Low.Value, Region) %>% 
+  mutate(
+    diff = High.Value - Low.Value
+  ) %>% 
+  group_by(Year, Region) %>% 
+  summarize(mean_diff = mean(diff)) %>% 
+  ggplot( aes(x=Year, y=mean_diff, group=Region, color=Region)) +
+    geom_line() +
+    labs(title="Change in Average Min Wage for Every Region") +  
+    theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+
+The plot above displays the average change in minimum wage for each of the four regions (Midwest, Northeast, South, & West) from 1968 to 2017. There are a few notable observations that are evident at first glance. First of all, there is a clear increase in wages for every region except the South through the 1970s. Then for about a decade between 1989 and 1999 there was not any movement in minimum wage for any of the four regions. Starting in 1999, however, the average minimum wage had a huge increase (relative to what it was previously) in the Northeast, Midwest, and especially the south. Interestingly, the average minimum wage in the Northeast had not changed since 1978 which explains why it hasn't changed much since 1968. The Southern region had the biggest relative boost in average minimum wage from 2000 to 2017. This can be attributed to the fact that the minimum wage in many southern states was very low to begin with and a couple states who had no state law for minimum wage (such as Florida) adopted a state-level minimum wage during this time period. That being said, the South still has the lowest average min wage in 2017 by a large margin, but they are trending up.
+
+Overall, this data generally aligns with what you would expect given each regions political identities. It is well known that the Northeast and West regions are typically more progressive than the South and Midwest regions. Moreover, progressive states such as New York or California tend to have higher minimum wages than conservative states such as Kentucky or Nebraska. With this in mind, the trends observed in the plots and tables above are corroborated with what we know about the regions.
+
+
+
+

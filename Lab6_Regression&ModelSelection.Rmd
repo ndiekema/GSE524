@@ -1,0 +1,415 @@
+---
+title: 'Lab 6: Traditional Regression and Model Selection'
+author: "Nathan Diekema"
+date: "11/5/2021"
+output:
+  rmdformats::downcute:
+    lightbox: true
+    self_contained: true
+    gallery: true
+    toc_depth: 3
+    highlight: github
+    df_print: paged #kable
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	fig.align = "center",
+	fig.height = 5,
+	fig.width = 10,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+**Load in the data**
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(DT)
+options(scipen = 999)
+insur_data <- read_csv("data/insurance_costs.csv")
+datatable(insur_data)
+```
+
+
+# Part 1: Data Exploration\
+
+
+**Summary of data**\
+
+```{r}
+summary(insur_data)
+
+insur_data %>% 
+  select(sex,smoker) %>% 
+  group_by(smoker, sex) %>% 
+  count()
+```
+**Cleaning data**\
+
+```{r}
+insur_data <- insur_data %>% 
+  mutate(sex = as.factor(sex),
+         smoker = as.factor(smoker),
+         region = as.factor(region))
+
+
+insur_data
+```
+
+```{r}
+insur_data %>% 
+  ggplot(aes(x=age, y=charges, color=smoker)) +
+    geom_point() + 
+    labs(x="Age", y="Insurance Charges (USD)", title="Age vs Insurance Cost") +
+    theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+The plot above compares insurance costs to age. As can be observed, the insurance cost trends upwards as you get older. This is what would be expected since older patients are at higher risk of injury and disease.
+
+```{r}
+insur_data %>% 
+  ggplot(aes(x=smoker, y=charges, fill=smoker)) +
+    geom_boxplot() +
+    labs(x="Smoker", y="Insurance Charges (USD)", title="Smokers vs Non-Smokers (Insurance Costs)") +
+    theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+This is plot compares smokers and non-smokers and their respective insurance costs. This is perhaps the most notable correlation in the data since there is a very clear difference between the two. As would be expected, smokers pay significantly more in insurance than non-smokers.
+
+
+
+```{r}
+insur_data %>% 
+  ggplot(aes(x=sex, y=charges, fill=sex)) + 
+    geom_boxplot() +
+    labs(x="Sex", y="Insurance Charges (USD)", title="Male vs Female (Insurance Costs)") +
+    theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+The plot above compares the insurance costs between males and females. The mean insurance cost of males is slightly higher than that of females. But what is most interesting is that the insurance cost for males tends to vary more than those of females. As you can see, the inter-quartile range for males is significantly larger than that of females.\
+
+
+# Part 2: Simple Linear Models\
+
+```{r}
+#Function for finding MSE
+mse <- function(x) {
+  mean(x$residuals^2)
+}
+```
+
+
+### **1.Construct a simple linear model to predict the insurance charges from the beneficiary’s age. Discuss the model fit, and interpret the coefficient estimates.**\
+
+```{r}
+
+lm_model <- linear_reg() %>% 
+            set_engine('lm') %>% # adds lm implementation of linear regression 
+            set_mode('regression')
+
+m1_fit <- lm_model %>% 
+          fit(charges ~ age, data = insur_data)
+
+sum1 <- summary(m1_fit$fit)
+sum1
+```
+
+Coefficients:
+
+- **Age**: The coefficient estimate for age is 228.80 for this model. This essentially means that, on average, for every time a person ages by one year, their medical insurance increases by 228.8 dollars.
+
+### **2. Make a model that also incorporates the variable sex. Report your results.**\
+
+```{r}
+m2_fit <- lm_model %>% 
+          fit(charges ~ age + sex, data = insur_data)
+
+sum2 <- summary(m2_fit$fit)
+sum2
+
+```
+
+Sex is not significant when being used to predict insurance costs. The p-value is 0.55 which is very high, indicating that it is a poor predictor.\
+
+### **3. Now make a model that does not include sex, but does include smoker. Report your results.**\
+
+
+```{r}
+m3_fit <- lm_model %>% 
+          fit(charges ~ age + smoker, data = insur_data)
+
+sum3 <- summary(m3_fit$fit)
+sum3
+```
+
+The smoker variable is a very significant predictor of insurance cost with an impressively small p-value.\
+
+
+### **4. Which model (Q2 or Q3) do you think better fits the data? Justify your answer by calculating the MSE for each model, and also by comparing R-squared values.**\
+
+```{r}
+mse1 <- mse(sum1)
+mse2 <- mse(sum2)
+mse3 <- mse(sum3)
+
+rsq1 <- sum1$r.squared
+rsq2 <- sum2$r.squared
+rsq3 <- sum3$r.squared
+
+# Compare Model 2 and Model 3
+df <- data.frame(Rsq=c(rsq2, rsq3),
+                 MSE=c(mse2, mse3))
+rownames(df) <- c("Model2", "Model3")
+df
+```
+
+Model 3 (charges ~ age + smoker) performed way better than Model 2. The Mean Squared Error (MSE) is nearly 4x lower and the Rsq is significantly higher. It is clear that Model 3 better fits the data and I'm confident it would be a much better predictor. \
+
+
+# Part 3: Multiple Linear Models\
+
+### **1. Fit a model that uses age and bmi as predictors. (Do not include an interaction term between these two.) Report your results. How does the MSE compare to the model in Part Two Q1? How does the Adjusted R-squared compare?**\
+
+```{r}
+m4_fit <- lm_model %>% 
+          fit(charges ~ age + bmi, data = insur_data)
+
+sum4 <- summary(m4_fit$fit)
+sum4
+
+rsq4 <- sum4$r.squared
+mse4 <- mse(sum4)
+
+# Compare Model 1 and Model 4
+df <- data.frame(adjRsq=c(sum1$adj.r.squared, sum4$adj.r.squared),
+                 MSE=c(mse1, mse4))
+rownames(df) <- c("Model1", "Model4")
+df
+
+```
+
+Based on the adjusted R^2 and MSE, Model 4 (charges ~ age + bmi) is superior. According to these parameters, there is not a huge difference in performance, but bmi does add to the model and is apparently a decent predictor. \
+
+
+### **2. Perhaps the relationships are not linear. Fit a model that uses age and age^2 as predictors. How do the MSE and R-squared compare to the model in P2 Q1?**\
+
+
+```{r}
+m5_fit <- lm_model %>% 
+          fit(charges ~ age + I(age^2), data = insur_data)
+
+sum5 <- summary(m5_fit$fit)
+sum5
+
+rsq5 <- sum5$r.squared
+mse5 <- mse(sum5)
+
+# Compare Model 1 and Model 4
+df <- data.frame(Rsq=c(rsq4, rsq5),
+                 MSE=c(mse4, mse5))
+rownames(df) <- c("Model4", "Model5")
+df
+```
+
+Model 4 (charges ~ age + bmi) has a better Rsq than the quadratic model. However, the quadratic model has a better MSE. Thus, it's hard to say which model is better in this scenario with these parameters.
+
+
+### **3. Fit a polynomial model of degree 4. How do the MSE and R-squared compare to the model in P2 Q1?**
+
+```{r}
+m6_fit <- lm_model %>% 
+          fit(charges ~ poly(age, 4), data = insur_data)
+
+sum6 <- summary(m6_fit$fit)
+sum6
+
+rsq6 <- sum6$r.squared
+mse6 <- mse(sum6)
+
+# Compare Model 1 and Model 4
+df <- data.frame(Rsq=c(rsq4, rsq6),
+                 MSE=c(mse4, mse6))
+rownames(df) <- c("Model4", "Model6")
+df
+```
+
+Model 4 (charges ~ age + bmi) performs better than the polynomial model of degree 4. Both the adjusted R^2 and MSE are better.
+
+
+### **4. Fit a polynomial model of degree 12. How do the MSE and R-squared compare to the model in P2 Q1?**
+
+```{r}
+m7_fit <- lm_model %>% 
+          fit(charges ~ poly(age, 12), data = insur_data)
+
+sum7 <- summary(m7_fit$fit)
+sum7
+
+rsq7 <- sum7$r.squared
+mse7 <- mse(sum7)
+
+# Compare Model 1 and Model 4
+df <- data.frame(Rsq=c(rsq4, rsq7),
+                 MSE=c(mse4, mse7))
+rownames(df) <- c("Model4", "Model6")
+df
+
+```
+
+Model 4 (charges ~ age + bmi) performs better than the polynomial model of degree 12. Both the adjusted R^2 and MSE are better.
+
+
+### **5. According to the MSE and R-squared, which is the best model? Do you agree that this is indeed the “best” model? Why or why not?**
+
+```{r}
+df <- data.frame(Rsq=c(rsq1, rsq2, rsq3, rsq4, rsq5, rsq6, rsq7),
+                 MSE=c(mse1, mse2, mse3, mse4, mse5, mse6, mse7))
+rownames(df) <- c("Model1", "Model2", "Model3", "Model4", "Model5", "Model6", "Model7")
+
+df %>% 
+  arrange(desc(Rsq))
+
+```
+
+Model 3 (charges ~ age + smoker) had the best performance out of all the models we tested with an R^2 of 0.759 and an MSE of 33719831. That being said, I wouldn't say this is the "best" model for this data. We have only tested a few of the possible models that could fit this data and there are many possibilities that could better fit the data than this one. 
+
+
+### **6. Plot the predictions from your model in Q4 as a line plot on top of the scatterplot of your original data.**
+
+```{r}
+
+insur_data %>% 
+  ggplot(aes(x=age, y=charges)) +
+    geom_point() +
+    geom_smooth(method='lm', se=FALSE, formula=y ~ poly(x, 12), color="blue2")
+
+```
+
+
+
+# Part 4: New Data\
+
+
+```{r}
+insur_data2 <- read_csv("data/insurance_costs_2.csv")
+datatable(insur_data2)
+```
+
+### **1. For each model, fit the model on the original data.**
+
+```{r}
+insur_train <- insur_data
+insur_test <- insur_data2
+
+# charges ~ age
+m1_fit <- lm_model %>% 
+          fit(charges ~ age, data = insur_train)
+
+# charges ~ age + bmi
+m2_fit <- lm_model %>% 
+          fit(charges ~ age + bmi, data = insur_train)
+
+# charges ~ age + bmi + smoker
+m3_fit <- lm_model %>% 
+          fit(charges ~ age + bmi + smoker, data = insur_train)
+
+# charges ~ (age + bmi):smoker
+m4_fit <- lm_model %>% 
+          fit(charges ~ (age + bmi):smoker, data = insur_train)
+
+# charges ~ (age + bmi)*smoker
+m5_fit <- lm_model %>% 
+          fit(charges ~ (age + bmi)*smoker, data = insur_train)
+
+```
+
+### **2. Then, use the fitted model to predict on the new data.**
+
+```{r}
+pred1 <- predict(m1_fit, insur_test)
+mse1 <- mean((insur_test$charges - pred1$.pred) ^ 2)
+
+pred2 <- predict(m2_fit, insur_test)
+mse2 <- mean((insur_test$charges - pred2$.pred) ^ 2)
+
+pred3 <- predict(m3_fit, insur_test)
+mse3 <- mean((insur_test$charges - pred3$.pred) ^ 2)
+
+pred4 <- predict(m4_fit, insur_test)
+mse4 <- mean((insur_test$charges - pred4$.pred) ^ 2)
+
+pred5 <- predict(m5_fit, insur_test)
+mse5 <- mean((insur_test$charges - pred5$.pred) ^ 2)
+
+df <- data.frame(MSE=c(mse1, mse2, mse3, mse4, mse5))
+rownames(df) <- c("Model1", "Model2", "Model3", "Model4", "Model5")
+
+df %>% 
+  arrange(MSE)
+
+```
+
+Model 5 (~ (age + bmi)*smoker) was the best fitted model based on MSE. As you can see from the table above, each model got progressively better with model 5 having the lowest value for MSE.
+
+
+### **3. Use 5-fold cross-validation to compare the models above instead of the single train/test split method you used in the previous part. Are your conclusions the same?**
+
+```{r}
+# Combine datasets
+all_insur_data <- rbind(insur_data, insur_data2)
+
+insur_rec <- 
+  recipe(charges ~ age, data = insur_data)
+
+# k-fold cross validation
+insur_cvs <- vfold_cv(all_insur_data, v = 5)
+
+
+# charges ~ age
+lm_model %>%
+  fit_resamples(charges ~ age, 
+                resamples = insur_cvs) %>% 
+  collect_metrics()
+
+# charges ~ age + bmi
+lm_model %>%
+  fit_resamples(charges ~ age + bmi, 
+                resamples = insur_cvs) %>% 
+  collect_metrics()
+
+# charges ~ age + bmi + smoker
+lm_model %>%
+  fit_resamples(charges ~ age + bmi +smoker, 
+                resamples = insur_cvs) %>% 
+  collect_metrics()
+
+# charges ~ (age + bmi):smoker
+lm_model %>%
+  fit_resamples(charges ~ (age + bmi):smoker, 
+                resamples = insur_cvs) %>% 
+  collect_metrics()
+
+# charges ~ (age + bmi)*smoker
+lm_model %>%
+  fit_resamples(charges ~ (age + bmi)*smoker, 
+                resamples = insur_cvs) %>% 
+  collect_metrics()
+
+
+```
+
+
+Based on the results from the k-fold cross validation, Model 5 is still the best predictor. It has the lowest value for RMSE and the highest value for R^2.
+
+
+
+
+

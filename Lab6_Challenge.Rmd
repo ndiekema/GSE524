@@ -1,0 +1,84 @@
+---
+title: 'Lab 6: Challenge'
+author: "Nathan Diekema"
+date: "11/7/2021"
+output:
+  rmdformats::downcute:
+    lightbox: true
+    self_contained: true
+    gallery: true
+    toc_depth: 2
+    number_sections: true
+    highlight: github
+    df_print: "kable"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	fig.align = "center",
+	fig.height = 5,
+	fig.width = 10,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+**Load in the data**
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(DT)
+options(scipen = 999)
+insur_data <- read_csv("data/insurance_costs.csv")
+insur_data2 <- read_csv("data/insurance_costs_2.csv")
+
+all_insur_data <- rbind(insur_data, insur_data2)
+datatable(all_insur_data)
+```
+
+**Write your own cross-validation function! This function should take the following arguments:**
+
+- data: the dataset to be used
+- k: the number of folds, or number pieces to split the data into
+\
+```{r}
+cross_validate <- function(data, k) {
+  # Create a linear model
+  lm_model <- linear_reg() %>% 
+            set_engine('lm') %>%
+            set_mode('regression')
+  
+  mse <- 0
+  data_size <- nrow(data)
+  split_size <- round(data_size / k)
+
+  for (i in 1:k) {
+    # Separate the data into training & testing 
+    istart <- (i-1)*split_size
+    iend <- (i)*split_size - 1
+    test_data <- data[istart:iend, ]
+    train_data <- data[c(1:istart, iend:data_size), ]
+    
+    # Fit the model
+    model_fit <- lm_model %>% 
+          fit(charges ~ age + bmi, data = test_data)
+  
+    pred <- predict(model_fit, test_data)
+    mse <- mse + (mean((test_data$charges - pred$.pred)^2))
+  }
+
+  # Return the mean MSE
+  return(mse / k)
+}
+
+```
+
+
+```{r}
+cross_validate(all_insur_data, 5)
+```
+
+The results are similar to Part 4 Question 1 in which we got an MSE of 132636406 whereas the MSE our function returned was 124404076.
+
