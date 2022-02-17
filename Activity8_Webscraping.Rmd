@@ -1,0 +1,109 @@
+---
+title: 'Activity 8: Webscraping'
+author: "Nathan Diekema"
+date: "10/13/2021"
+output:
+  rmdformats::downcute:
+    lightbox: true
+    self_contained: true
+    gallery: true
+    highlight: github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	fig.align = "center",
+	fig.height = 5,
+	fig.width = 10,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+## Cryptocurrency Information
+
+```{r message=FALSE, warning=FALSE}
+library(tidyverse)
+library(rvest)
+library(XML)
+```
+
+## Part 1 & 2
+
+Use the selector gadget and the rvest package to scrape the information from the CryptoCurrency Price table on this webpage.
+
+```{r message=FALSE, warning=FALSE}
+
+url <- "https://goldprice.org/cryptocurrency-price"
+cryptolink <- read_html(url)
+cryptohtml <- html_nodes(cryptolink, css="td.views-align-right , td.views-field-field-crypto-proper-name")
+cryptotext <- html_text(cryptohtml)
+
+cryptotext <- cryptotext %>% 
+  str_replace_all("[,\\$\\%\n]" , "") %>% 
+  str_replace("^[:blank:]+", "") %>% 
+  str_replace("[:blank:]+$", "") 
+
+head(cryptotext, 18)
+```
+
+## Part 3 & 4
+
+```{r message=FALSE, warning=FALSE}
+
+length = length(cryptotext)
+
+cryptodf <- data.frame(
+  CryptoCurrency = cryptotext[seq(1, length, by=6)],
+  Market_Cap = cryptotext[seq(2, length, by=6)],
+  Price = cryptotext[seq(3, length, by=6)],
+  Circulating_Supply = cryptotext[seq(4, length, by=6)],
+  Volume_24h = cryptotext[seq(5, length, by=6)],
+  Change_24h = cryptotext[seq(6, length, by=6)]
+)
+
+cryptodf <- cryptodf %>% 
+  mutate(
+    Market_Cap = as.numeric(Market_Cap),
+    Price = as.numeric(Price),
+    Circulating_Supply = as.numeric(Circulating_Supply),
+    Volume_24h = as.numeric(Volume_24h),
+    Change_24h = as.numeric(Change_24h)/100
+  )
+
+head(cryptodf, 5)
+
+```
+
+
+## Part 5
+
+Identify the top cryptocurrencies with respect to each of the following separately: Market Cap, Price, Change (24h)
+
+```{r message=FALSE, warning=FALSE}
+
+## Market Cap
+cryptodf %>% 
+  select(CryptoCurrency, Market_Cap) %>% 
+  arrange(desc(Market_Cap)) %>% 
+  head(5)
+
+## Price
+cryptodf %>% 
+  select(CryptoCurrency, Price) %>% 
+  arrange(desc(Price)) %>% 
+  head(5)
+
+## Change_24h
+cryptodf %>% 
+  select(CryptoCurrency, Change_24h) %>% 
+  arrange(desc(Change_24h)) %>% 
+  head(5)
+
+
+```
+
+
+
+

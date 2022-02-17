@@ -1,0 +1,117 @@
+---
+title: 'Activity 9: Factors, Strings, & Dates'
+author: "Nathan Diekema"
+date: "10/21/2021"
+output:
+  rmdformats::downcute:
+    lightbox: true
+    self_contained: true
+    gallery: true
+    highlight: github
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	fig.align = "center",
+	fig.height = 5,
+	fig.width = 10,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(DT)
+colleges_clean <- read_csv("data/colleges_clean.csv")
+colleges_clean
+```
+
+
+```{r}
+colleges_clean <- 
+  colleges_clean %>%
+  mutate(
+    CONTROL = factor(CONTROL),
+    Type = fct_recode(CONTROL, Public = "1", Private = "2")
+  )
+colleges_clean
+```
+
+
+```{r}
+
+x <- c("Cat", "Dog", "Dog")
+x <- factor(x)
+x
+
+fct_relevel(x, c("Dog", "Cat"))
+```
+
+```{r}
+fct <- c("Cat", "Dog", "Cat", "Dog", "Dog", "Fish", "Cat", "Dog", "Turtle"); fct
+
+fct <- as.factor(fct); fct
+fct_lump(fct, n=2)
+```
+
+
+```{r}
+x <- c("H", "E", "L", "L", "O")
+y <- "Hello"
+length(x)
+length(y)
+z <- str_length(x)
+z
+
+cv <- c("hello world", "The birds and the bees", "get a real job")
+str_sub(cv, 3, 9)
+
+
+str_c(x,y, collapse="")
+```
+
+
+```{r}
+colleges_clean <- colleges_clean %>% 
+  mutate(
+    REGION <- as.factor(REGION)
+  )
+
+summary(colleges_clean$REGION)
+
+
+str_subset(colleges_clean$INSTNM, "California Polytechnic")
+
+colleges_clean %>% 
+  mutate(name_length = str_length(INSTNM)) %>% 
+  arrange((name_length))
+  
+  
+
+```
+
+```{r}
+dt <- as_datetime(Sys.time())
+dt <- now()
+dt
+year(dt)
+years(1)
+dyears(1)
+interval <- ymd("2017-12-31") %--% ymd("2022-01-24")
+dt %within% interval
+
+
+parse_date_time("09-01-01", "ym")
+```
+
+```{r}
+bday <- as_datetime(ymd("1999-01-11"))
+bday - months(9)
+wday(bday, label=T)
+```
+
