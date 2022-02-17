@@ -1,0 +1,351 @@
+---
+title: 'Lab 8: Discriminant Analysis and Support Vector Machines'
+author: "Nathan Diekema & Arash Akhavi"
+date: "11/28/2021"
+output:
+  rmdformats::downcute:
+    lightbox: true
+    self_contained: true
+    gallery: true
+    toc_depth: 3
+    highlight: github
+    df_print: paged #kable
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	fig.align = "center",
+	fig.height = 5,
+	fig.width = 10,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+
+```{r include=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(kernlab)
+library(discrim)
+library(glmnet)
+options(scipen=999)
+zoo <- read_csv("https://www.dropbox.com/s/kg89g2y3tp6p9yh/zoo_final.csv?dl=1")
+set.seed(98249)
+zoo
+```
+
+
+# Part 1: PCA Preprocessing
+
+### Q1: PCA
+
+The results of the PCA transformation represent the transformed ranging from highest variance (PC1) to lowest variance. By observing PC1, the most important variables in spreading observations will be legs (0.967), fins (0.114) and hair (0.106). For PC2, the most important variable is milk (0.449) amd for PC3 the most important is aquatic (0.434).
+
+
+### Q2: Choosing PCs
+
+```{r}
+ncol(zoo) - 2
+```
+There are 16 predictors in this data set that are being used in the PCA transformation (*p* = 16). The number of PCs used must be less than 16 while still achieving over atleast 90% or more total variance. With this in mind, we chose to use all of the PCs up to PC8 which will cover approximately 95.7% variance.
+
+
+### Q3: New Dataset
+
+```{r}
+zoo_rec <- 
+  recipe(Class_Type ~ ., data=zoo) %>% 
+  step_rm(animal_name) %>% 
+  step_pca(all_numeric(), threshold = 0.8, 
+           options = c(center = TRUE))
+
+zoo_trained <- zoo_rec %>% prep(zoo)
+zoo_pcs <- zoo_trained %>% bake(zoo)
+```
+
+
+### Q4: Explore
+
+```{r}
+zoo_pcs %>% 
+  select(Class_Type, PC1, PC2) %>% 
+  ggplot(aes(x=PC1, y=PC2, color=Class_Type)) +
+    geom_point()
+
+zoo_pcs %>% 
+  select(Class_Type, PC2, PC3) %>% 
+  ggplot(aes(x=PC2, y=PC3, color=Class_Type)) +
+    geom_point()
+  
+```
+
+The first plot (PC1 vs PC2) is very effective at separating most of the classes in the dataset. It is especially good at concentrating the mammal, bird, and invertebrate classes. The second plot (PX2 vs PC3) effectively separates the mammals, is okay at separating the invertebrate, but the rest are kind of muddled together.
+
+
+# Part 2: LDA
+
+```{r}
+zoo_cvs <- vfold_cv(zoo, v = 5, strata=Class_Type)
+```
+
+
+### Q1: Linear
+
+```{r}
+zoo_rec2 <-
+  recipe(Class_Type ~ ., data=zoo) %>% 
+  update_role(animal_name, new_role="class") %>% 
+  step_pca(all_numeric(), threshold = 0.8, 
+           options = c(center = TRUE), num_comp = 3)
+
+zoo_trained <- zoo_rec %>% prep(zoo)
+zoo_pcs <- zoo_trained %>% bake(zoo)
+
+```
+
+```{r}
+lda_mod <- discrim_linear() %>% 
+  set_engine("MASS") %>% 
+  set_mode("classification")
+
+lda_wflow <- workflow() %>% 
+  add_recipe(zoo_rec2) %>% 
+  add_model(lda_mod)
+
+lda_results <- lda_wflow %>% 
+  fit_resamples(resamples = zoo_cvs, metrics = metric_set(accuracy, roc_auc, sensitivity, specificity, precision)) %>% 
+  collect_metrics() %>% 
+  dplyr::select(.metric, mean)
+
+colnames(lda_results) <- c("metric", "LDA")
+
+```
+
+
+### Q2: Quadratic
+
+```{r}
+qda_mod <- discrim_regularized(frac_common_cov = 0) %>% 
+  set_engine("klaR") %>% 
+  set_mode("classification")
+
+qda_wflow <- workflow() %>% 
+  add_recipe(zoo_rec2) %>% 
+  add_model(qda_mod)
+
+qda_results <- qda_wflow %>% 
+  fit_resamples(resamples = zoo_cvs, metrics = metric_set(accuracy, roc_auc, sensitivity, specificity, precision)) %>% 
+  collect_metrics() %>% 
+  dplyr::select(.metric, mean)
+
+colnames(qda_results) <- c("metric", "QDA")
+
+```
+
+### Q3: Interpretation
+
+**Which classifier did better?**
+
+```{r}
+left_join(lda_results, qda_results, by="metric")
+```
+
+```{r}
+zoo %>% 
+  group_by(Class_Type) %>% 
+  count()
+```
+
+
+The quadratic model performed significantly better in terms of all of the metrics provided in the table above. Since this is an imbalanced dataset, there should be an emphasis on the roc_auc metric (as well as sensitivity and specificity). Both of these metrics are far better for the quadratic model as you can see from the table above. Both sensitivity and specificity are very high at 0.975 and 0.995 respectively. This means that the model does an excellent job at accurately separating the data into their respective classes.
+
+
+# Part 3: SVM
+
+
+### Q1: Linear
+
+```{r}
+
+tune_spec <- svm_poly(cost = tune(), degree = 1) %>%
+  set_mode("classification") %>%
+  set_engine("kernlab")
+
+svm_wflow <- workflow() %>%
+  add_model(tune_spec) %>%
+  add_recipe(zoo_rec2)
+
+svm_grid <- control_grid(verbose = TRUE)
+
+svm_grid_search <-
+  tune_grid(
+    svm_wflow,
+    resamples = zoo_cvs,
+    ctrl = svm_grid
+  )
+
+svm_grid_search %>% 
+  collect_metrics() %>% 
+  filter(.metric=="roc_auc") %>% 
+  arrange(desc(mean))
+
+
+
+# Build model using best cost value
+# cost = 0.182   
+
+svm_mod <- svm_poly(cost = 0.182, degree = 1) %>%
+  set_mode("classification") %>%
+  set_engine("kernlab")
+
+svm_wflow1 <- workflow() %>%
+  add_model(svm_mod) %>%
+  add_recipe(zoo_rec2)
+
+svm1_results <- svm_wflow1 %>% 
+  fit_resamples(resamples = zoo_cvs, metrics = metric_set(accuracy, roc_auc, sensitivity, specificity, precision)) %>% 
+  collect_metrics() %>% 
+  dplyr::select(.metric, mean)
+
+svm1_results
+colnames(svm1_results) <- c("metric", "SVM1")
+```
+
+
+
+### Q2: SVM
+
+```{r}
+
+tune_spec <- svm_poly(cost = tune(), degree = tune()) %>%
+  set_mode("classification") %>%
+  set_engine("kernlab")
+
+svm_wflow <- workflow() %>%
+  add_model(tune_spec) %>%
+  add_recipe(zoo_rec2)
+
+svm_grid <- control_grid(verbose = TRUE)
+
+svm_grid_search <-
+  tune_grid(
+    svm_wflow,
+    resamples = zoo_cvs,
+    ctrl = svm_grid
+  )
+
+svm_grid_search %>% 
+  collect_metrics() %>% 
+  filter(.metric=="roc_auc") %>% 
+  arrange(desc(mean))
+
+
+# Build model using best cost and degree value
+# cost = 0.136        
+# degree = 2
+
+svm_mod <- svm_poly(cost = 0.136, degree = 2) %>%
+  set_mode("classification") %>%
+  set_engine("kernlab")
+
+svm_wflow2 <- workflow() %>%
+  add_model(svm_mod) %>%
+  add_recipe(zoo_rec2)
+
+svm2_results <- svm_wflow2 %>% 
+  fit_resamples(resamples = zoo_cvs, metrics = metric_set(accuracy, roc_auc, sensitivity, specificity, precision)) %>% 
+  collect_metrics() %>% 
+  dplyr::select(.metric, mean)
+
+svm2_results
+colnames(svm2_results) <- c("metric", "SVM2")
+```
+
+
+### Q3: Interpretation
+
+```{r}
+left_join(svm1_results, svm2_results, by="metric")
+```
+
+As earlier there is a greater emphasis on the roc_auc metric as well as the sensitivity and specificity metrics over the accuracy. We can see from the table above that the SVM with a polynomial degree performed better than the linear SVM model in the roc_auc, sensitivity, and specificity metrics. This means that the polynomial SVM model does an significantly better job at accurately separating the data into their respective classes than the linear SVM model. Intuitively, this makes sense because we are tuning both the cost function and degree of the kernel in the 2nd model which almost guarantees that we will find a model that better fits the data.
+
+# Part 4: Prediction
+
+**Find the best probabilities with QDA**
+```{r}
+
+lda_wflow <- workflow() %>% 
+  add_recipe(zoo_rec2) %>% 
+  add_model(qda_mod)
+
+lda_fit <- fit(lda_wflow, data = zoo)
+
+human <- predict(lda_fit, data.frame(
+  animal_name = "human",
+  hair = 1,
+  feathers = 0,
+  eggs = 0,
+  milk = 1,
+  airborne = 0,
+  aquatic = 0,
+  predator = 1,
+  toothed = 1,
+  backbone = 1,
+  breathes = 1,
+  venomous = 0,
+  fins = 0,
+  legs = 2,
+  tail = 0,
+  domestic = 0,
+  catsize = 1),
+  type = "prob"
+)
+human
+```
+**Find the best probabilities with SVM**
+```{r}
+svm_mod <- svm_poly(cost = 4.176424827, degree = 2) %>% 
+  set_engine("kernlab") %>% 
+  set_mode("classification")
+
+svm_wflow <- workflow() %>% 
+  add_recipe(zoo_rec2) %>% 
+  add_model(svm_mod)
+
+svm_fit <- fit(svm_wflow, data = zoo)
+
+human <- predict(svm_fit, data.frame(
+  animal_name = "human",
+  hair = 1,
+  feathers = 0,
+  eggs = 0,
+  milk = 1,
+  airborne = 0,
+  aquatic = 0,
+  predator = 1,
+  toothed = 1,
+  backbone = 1,
+  breathes = 1,
+  venomous = 0,
+  fins = 0,
+  legs = 2,
+  tail = 0,
+  domestic = 0,
+  catsize = 1),
+  type = "prob"
+)
+human
+```
+From the tables above it is evident that the LDA model is able to better predict Mammal as the class type for a human at almost 1.0 while the SVM model predicted Mammal as the class type for human at only 0.39. This essentially means that the LDA is better at separating the classes in confidence based on the predictors. That being said, the SVM model still correctly classifies humans as mammals, but with far less confidence than the LDA model. This makes the LDA model the best model when making predictions with this data. 
+
+
+
+
+
+
+
+

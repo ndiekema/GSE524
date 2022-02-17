@@ -1,0 +1,135 @@
+---
+title: 'Lab 8: Challenge'
+author: "Nathan Diekema"
+date: "11/28/2021"
+output:
+  rmdformats::downcute:
+    lightbox: true
+    self_contained: true
+    gallery: true
+    toc_depth: 3
+    highlight: github
+    df_print: paged #kable
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	fig.align = "center",
+	fig.height = 5,
+	fig.width = 10,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(kernlab)
+library(discrim)
+library(glmnet)
+options(scipen=999)
+zoo <- read_csv("https://www.dropbox.com/s/kg89g2y3tp6p9yh/zoo_final.csv?dl=1")
+set.seed(98249)
+zoo <- zoo %>% 
+  mutate(
+    Class_Type = as.factor(Class_Type)
+  )
+zoo_cvs <- vfold_cv(zoo, v = 5, strata=Class_Type)
+```
+
+
+
+# Challenge: Full Data
+
+
+### Q1: Linear
+
+```{r}
+# names <- c(1,3:18)
+# zoo[,names] <- lapply(zoo[,names] , factor)
+
+zoo_rec <-
+  recipe(Class_Type ~ ., data=zoo) %>% 
+  step_rm(animal_name, feathers, milk)
+
+```
+
+
+```{r}
+lda_mod <- discrim_linear() %>% 
+  set_engine("MASS") %>% 
+  set_mode("classification")
+
+lda_wflow <- workflow() %>% 
+  add_recipe(zoo_rec) %>% 
+  add_model(lda_mod)
+
+lda_results <- lda_wflow %>% 
+  fit_resamples(resamples = zoo_cvs, metrics = metric_set(accuracy, roc_auc, sensitivity, specificity, precision)) %>% 
+  collect_metrics() %>% 
+  dplyr::select(.metric, mean)
+
+colnames(lda_results) <- c("metric", "LDA")
+
+```
+
+
+### Q2: Quadratic
+
+```{r}
+
+tune_spec <- svm_poly(cost = tune(), degree = tune()) %>%
+  set_mode("classification") %>%
+  set_engine("kernlab")
+
+svm_wflow <- workflow() %>%
+  add_model(tune_spec) %>%
+  add_recipe(zoo_rec)
+
+svm_grid <- control_grid(verbose = TRUE)
+
+svm_grid_search <-
+  tune_grid(
+    svm_wflow,
+    resamples = zoo_cvs,
+    ctrl = svm_grid
+  )
+
+svm_grid_search %>% 
+  collect_metrics() %>% 
+  filter(.metric=="roc_auc") %>% 
+  arrange(desc(mean))
+
+
+# Build model using best cost and degree value
+# cost = 0.00340      
+# degree = 2
+
+svm_mod <- svm_poly(cost = 0.00340      , degree = 2) %>%
+  set_mode("classification") %>%
+  set_engine("kernlab")
+
+svm_wflow <- workflow() %>%
+  add_model(svm_mod) %>%
+  add_recipe(zoo_rec)
+
+svm_results <- svm_wflow %>% 
+  fit_resamples(resamples = zoo_cvs, metrics = metric_set(accuracy, roc_auc, sensitivity, specificity, precision)) %>% 
+  collect_metrics() %>% 
+  dplyr::select(.metric, mean)
+
+colnames(svm_results) <- c("metric", "SVM")
+
+```
+
+**Compare Models w/out PCA**
+
+```{r}
+left_join(lda_results, svm_results, by="metric")
+```
+
+Them models have similar performance, but the SVM is overall a better predictor of the data. This is the same conclusion that was made from the lab when using PCA. However, the difference in performance was far more in favor of the SVM when directly compared to the LDA model when using the PCA transformation as we did in the lab.

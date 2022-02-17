@@ -1,0 +1,154 @@
+---
+title: 'Lab 7: Challenge'
+author: "Nathan Diekema"
+date: "11/15/2021"
+output:
+  rmdformats::downcute:
+    lightbox: true
+    self_contained: true
+    gallery: true
+    toc_depth: 3
+    highlight: github
+    df_print: paged #kable
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	fig.align = "center",
+	fig.height = 5,
+	fig.width = 10,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+
+
+**Load Libraries & Data**
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(kknn)
+library(ISLR)
+library(DT)
+ha <- read_csv("https://www.dropbox.com/s/aohbr6yb9ifmc8w/heart_attack.csv?dl=1")
+ha
+```
+
+**Data Exploration/Cleaning**
+
+```{r}
+set.seed(2012)
+
+ha <- ha %>% 
+  mutate(
+    sex = as.factor(sex),
+    cp = as.factor(cp),
+    restecg = as.factor(restecg),
+    output = as.factor(output)
+    )
+```
+
+
+**Setting up the model**\
+
+```{r}
+# Logistic Classification Model
+log_model <- logistic_reg() %>%
+  set_mode("classification") %>%
+  set_engine("glm")
+
+log_rec <- recipe(output ~ age + chol + sex + cp + thalach + trtbps, data = ha) %>% 
+  step_dummy(sex) %>% 
+  step_dummy(cp)
+
+log_wflow <- workflow() %>%
+  add_recipe(log_rec) %>%
+  add_model(log_model)
+
+# Fit the model to training data
+log_fit <- fit(log_wflow, data=ha)
+log_fit %>% pull_workflow_fit()
+
+
+# KNN Model
+knn_model <- nearest_neighbor(neighbors = 75) %>%
+  set_mode("classification") %>% 
+  set_engine("kknn")
+
+knn_rec <- recipe(output ~ age + sex + cp + thalach, data = ha) %>%
+  step_dummy(sex) %>% 
+  step_dummy(cp) %>% 
+  step_normalize(all_numeric())
+
+knn_wflow <- workflow() %>%
+  add_recipe(knn_rec) %>%
+  add_model(knn_model)
+
+# Fit the model to training data
+knn_fit <- fit(knn_wflow, data=ha)
+knn_fit %>% pull_workflow_fit()
+
+```
+
+
+**Load in validation data**\
+
+```{r}
+ha_validation <- read_csv("https://www.dropbox.com/s/jkwqdiyx6o6oad0/heart_attack_validation.csv?dl=1")
+
+ha_validation <- ha_validation %>% 
+  mutate(
+    sex = as.factor(sex),
+    cp = as.factor(cp),
+    restecg = as.factor(restecg),
+    output = as.factor(output)
+    )
+
+ha_validation
+```
+
+**Get predictions and organize into dataframes**\
+
+```{r}
+# Log
+pred_log_val <- ha_validation %>% 
+  select(output) %>% 
+  bind_cols(
+    predict(log_fit, ha_validation),
+    predict(log_fit, ha_validation, type = "prob")
+  ) %>% 
+  rename(truth=output, predicted=.pred_class)
+
+# KNN
+pred_knn_val <- ha_validation %>% 
+  select(output) %>% 
+  bind_cols(
+    predict(knn_fit, ha_validation),
+    predict(knn_fit, ha_validation, type = "prob")
+  ) %>% 
+  rename(truth=output, predicted=.pred_class)
+```
+
+# Challenge: Cohen’s Kappa
+
+Use online resources to research this measurement. Calculate it for the models from Part One, Q1-2, and discuss reasons or scenarios that would make us prefer to use this metric as our measure of model success. Do your conclusions from above change if you judge your models using Cohen’s Kappa instead? Does this make sense?
+
+```{r}
+# Logistic Model
+df <- data.frame(rbind(kap(pred_log_val, truth = truth,
+            estimate = predicted),
+            kap(pred_knn_val, truth = truth,
+            estimate = predicted)))
+
+rownames(df) <- c("Logistic Model", "KNN Model")
+
+df
+```
+
+Cohen's Kappa gives information on how much better the model is than it would achieve if simply guessing at random. This is a good metric because it takes data imbalances into account which is not done by the overall accuracy. The value varies from -1 to 1 with values below 0 indicating the classifier is useless and values from 0-1 indicating a progressively more effective classifier. The table above has the cohen kappa values for each of our classifiers. The logistic model performed better with a value 0.524 which typically means the model is moderately good at classifying patients. The KNN model on the other hand achieved a value of 0.43 which indicated it is a slightly less accurate classifier than the logistic model. This aligns with what we determined earlier, the logistic model has a better overall accuracy, precision, and specificity. I'm guessing that if I were to reduce the value of k neighbors in the KNN model that this metric would increase, The only reason k is so high is because I was trying to maximize roc_auc when building the models.
+
+

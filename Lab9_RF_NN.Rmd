@@ -1,0 +1,365 @@
+---
+title: 'Lab 9: Random Forests & Neural Networks'
+author: "Nathan Diekema & Arash Akhavi"
+date: "12/4/2021"
+output:
+  rmdformats::downcute:
+    lightbox: true
+    self_contained: true
+    gallery: true
+    toc_depth: 3
+    highlight: github
+    df_print: paged #kable
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	fig.align = "center",
+	fig.height = 5,
+	fig.width = 10,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+```{r include=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(rpart.plot)
+library(discrim)
+library(baguette)
+library(janitor)
+library(vip)
+options(scipen=999)
+set.seed(1984)
+```
+
+
+# Dataset 1: Mushrooms
+
+```{r}
+mushrooms <- read_csv("https://www.dropbox.com/s/jk5q3dq1u63ey1e/mushrooms.csv?dl=1",
+                      col_types = str_c(rep("c", 23), collapse = "")) 
+
+mushrooms <- mushrooms %>% 
+    janitor::clean_names()
+
+mushrooms
+```
+
+## Part 1: A perfect tree
+
+Fit a single decision tree to the full mushroom data, and plot the resulting tree.
+
+You should find that almost all mushrooms are perfectly classified; that is, the resulting leaf nodes are very close to 100% pure.
+
+Based on the tree that results, suggest a “nature guide” that tells people which mushrooms are safe to eat and which aren’t.
+
+```{r}
+mushrooms_rec <- recipe(class ~ ., data = mushrooms) %>% 
+    step_rm(veil_type, gill_attachment)
+
+tree_mod <- decision_tree() %>%
+  set_engine("rpart") %>%
+  set_mode("classification")
+
+tree_wflow <- workflow() %>%
+  add_recipe(mushrooms_rec) %>%
+  add_model(tree_mod) %>% 
+  fit(mushrooms)
+
+tree_fit <- tree_wflow %>% 
+  pull_workflow_fit()
+
+rpart.plot(tree_fit$fit)
+
+```
+
+\
+**Nature Guide**
+
+General tips for determining whether a mushroom is poisonous or not:
+
+1. If the mushroom does not have an odor similar to that of almonds or anise, or if the mushroom has no odor at all, it is most likely poisonous. Common odors of poisonous mushrooms include: creosot, fishy, foul, musty, pungent, and spicy.
+2. If the mushroom does not have an odor or smells of almonds or anise, the next step is to look at the spore print color. If the spore print color of the mushroom is anything but green, steer clear because it is most likely poisonous. Dangerous spore print colors include: black, brown, buff, chocolate, orange, purple, white, and yellow.
+
+
+## Part 2: ...or is it?
+
+Before we send people off into the world to each poisonous mushrooms, we want to be confident of our guidelines. The decision tree in Q1 may achieve perfection on the data it is fit to, but do we believe these guidelines will hold for future data?  
+  
+Apply each of the following resampling and/or ensemble techniques to this classification problem. For each, make an argument from the results.
+
+### Q1: Cross-Validation
+
+```{r}
+mushrooms_cvs <- vfold_cv(mushrooms, v = 5)
+
+tree_wflow %>% 
+  fit_resamples(resamples = mushrooms_cvs) %>% 
+  collect_metrics()
+
+```
+
+This dataset is limited and as a result the decision tree model discussed in part 1 is overfitted to this dataset and will likely not perform as well when introduced to new data. Especially considering that this dataset only contains certain (hypothetical) species all belonging to the same family. So it should definitely be considered that the patterns found in this dataset may not apply to other mushroom species.
+
+
+### Q2: Bagging
+
+```{r}
+
+bag_mod <- bag_tree() %>%
+  set_engine("rpart", times = 25) %>%
+  set_mode("classification")
+
+bag_tree_wflow <- workflow() %>%
+  add_recipe(mushrooms_rec) %>%
+  add_model(bag_mod)
+
+bag_tree_wflow %>%
+  fit_resamples(resamples = mushrooms_cvs) %>% 
+  collect_metrics()
+
+```
+
+The classification rules we learned in part 1 are overfit to this particular dataset. The extremely high roc_auc value of 1 is indicative of this. 
+
+
+### Q3: Random Forests
+
+```{r}
+
+rf_spec <- rand_forest(mtry = tune(), trees = tune(), min_n = tune()) %>%
+  set_engine("ranger") %>%
+  set_mode("classification")
+
+rf_wflow <- workflow() %>%
+  add_recipe(mushrooms_rec) %>%
+  add_model(rf_spec)
+
+rf_grid <- control_grid(verbose = TRUE)
+
+rf_grid_search <- tune_grid(
+    rf_wflow,
+    resamples = mushrooms_cvs,
+    ctrl = rf_grid
+  )
+
+rf_grid_search %>% show_best(metric = "roc_auc")
+
+# Best tuned random forest metrics:
+#   mtry: 14
+#   trees: 1276
+#   min_n: 40
+
+rf_mod <- rand_forest(mtry = 14, trees = 1276, min_n = 40) %>%
+  set_engine("ranger", importance = "impurity")%>%
+  set_mode("classification")
+
+rf_wflow <- workflow() %>%
+  add_recipe(mushrooms_rec) %>%
+  add_model(rf_mod)
+
+rf_wflow %>% 
+  fit_resamples(resamples = mushrooms_cvs) %>% 
+  collect_metrics()
+
+```
+
+The random forests model achieved an accuracy and roc_auc of 1, which is indicative of overfitting to the data. It will likely not perform as well on new mushroom data. 
+
+### Q4: Neural Networks
+
+```{r}
+
+tune_spec <- mlp(
+  hidden_units = tune(),
+  penalty = tune(),
+  epochs = 100,
+  activation = "softmax"
+) %>%
+  set_engine("nnet") %>%
+  set_mode("classification")
+
+nn_wflow <- workflow() %>%
+  add_recipe(mushrooms_rec) %>%
+  add_model(tune_spec)
+
+nn_grid <- control_grid(verbose = TRUE, save_pred = TRUE)
+
+nn_grid_search <-
+  tune_grid(
+    nn_wflow,
+    resamples = mushrooms_cvs,
+    ctrl = nn_grid
+  )
+
+nn_grid_search %>%
+  show_best(metric = "roc_auc")
+
+# Best NN metrics:
+#   hidden_units: 6
+#   penalty: 0.0441904789588092
+
+nn_mod <- mlp(
+  hidden_units = 6,
+  penalty = 0.0441904789588092,
+  epochs = 100,
+  activation = "softmax"
+) %>%
+  set_engine("nnet") %>%
+  set_mode("classification")
+
+nn_wflow <- workflow() %>%
+  add_recipe(mushrooms_rec) %>%
+  add_model(nn_mod)
+
+nn_wflow %>%
+  fit_resamples(resamples = mushrooms_cvs) %>% 
+  collect_metrics()
+```
+
+Similar to our random forests model, the neural network has achieved perfect performance on our dataset with a accuracy and roc_auc of 1. Once again, this is typically a sign of overfitting. 
+
+
+
+## Part 3: Logistic Regression
+
+Fit a logistic regression, including only the predictors that you deem most important based on your work in Parts One and Two. Interpret the results: which features of a mushroom are most indicative of poisonness?  
+
+
+```{r}
+log_mod <- logistic_reg() %>%
+  set_mode("classification") %>%
+  set_engine("glm")
+
+mushroom_rec <- recipe(class ~ odor + spore_print_color, 
+                     data = mushrooms)
+
+log_wflow <- workflow() %>% 
+  add_recipe(mushrooms_rec) %>%
+  add_model(log_mod)
+
+log_wflow %>% 
+  fit_resamples(mushrooms_cvs) %>% 
+  collect_metrics()
+
+```
+
+Our logistic regression model achieved an accuracy and roc_auc of 1. The explanatory variables used were odor and spore print color. These features are the most indicative of poisonness as we determined earlier from our single decision tree. Evidently, these variables alone were able to achieve perfect accuracy in the logistic model, which just goes to show how important they are for mushroom classification.
+
+
+# Dataset 2: Telecom Customers
+
+Congratulations! You have been hired by the Data Science division of a major telecommunication company. 
+\
+The Sales division of the company wants to understand how customer demographics - such as their age, income, marital status, employment status, etc - impact the customer’s behavior. They have identified four different types of customers, and labeled a dataset of existing customers with these categories.
+\
+You’ve been tasked with studying the customer demographics and customer categories. The company would like two results from you:
+
+1. A model that can be used to predict what category a new customer who signs up will likely fall into.
+2. Insight into what demographics are associated with these customer differences.
+
+```{r}
+tele <- read_csv("https://www.dropbox.com/s/9dymy30v394ud8h/Telecust1.csv?dl=1")
+tele <- tele %>% 
+  mutate(
+    marital = as.factor(marital),
+    retire = as.factor(retire),
+    gender = as.factor(gender),
+    custcat = as.factor(custcat),
+    region = as.factor(region)
+  )
+
+tele_cvs <- vfold_cv(tele, v = 5)
+tele
+```
+
+## Part 4: Report to your manager
+
+**Your manager, the head of the Data Science department, would like a summary of your work.**
+\
+Dear Data Science Department,
+\
+\
+Given the telecommunication data gathered about customer insights a decision tree was generated via the tideymodels package in R. This decision tree gave key insights into predicting which category a new customer who signs up for the network will likely wall into. The decision tree revealed that if the customer was educated they would have a 70% probability of being a part of category C and in addition to that if the tenure value was < 37 they would have equal parts probability of being from category C or A (35%). Alternatively, if the customer was not educated they would have a 30% probability of being in category D. The data was then cross-validated to generate key metrics with regard to the decision tree and the team found an accuracy value of about 39% and an roc_auc value of about 0.63. We trained and tested a neural network and random forest model on this dataset to compare the results against the single decision tree and both ended up with very similar results. Both the neural network and the random forest performed negligibly better in the roc_auc metric. Because of this, we chose to go with the decision tree due to it's competitive performance, simplicity, and interpretability.
+\
+```{r collapse=TRUE}
+# Decision Tree
+tele_rec <- recipe(custcat ~ ., tele)
+
+tree_mod <- decision_tree() %>%
+set_engine("rpart") %>%
+  set_mode("classification")
+
+tree_wflow <- workflow() %>%
+  add_recipe(tele_rec) %>%
+  add_model(tree_mod) %>% 
+  fit(tele)
+
+tree_wflow %>% 
+  fit_resamples(tele_cvs) %>% 
+  collect_metrics()
+  
+#Plot Decision Tree
+tree_fit <- tree_wflow %>% 
+  pull_workflow_fit()
+
+rpart.plot(tree_fit$fit)
+
+```
+\
+With regard to discovering insights about which demographics are associated with these customer differences the team chose to utilize a Random Forest model as we could combine the predictions of many decision trees into a single model. Using the same recipe as before a Random Forest model was tuned to find the best fit model using the highest roc_auc (0.669), then fit and then the vip package was utilized to generate a plot ranking the explanatory variables with regard to importance based on the model fit from the Random Forest. We chose to use the vip package because the plot provides a great visualization of the most important explanatory variables in determining which demographics are associated with customer differences. The plot generated revealed that tenure and education are the most important demographics whereas address and reside are the least important.
+\
+```{r collapse=TRUE}
+# Random Forest
+rf_spec <- rand_forest(mtry = tune(), trees = tune(), min_n = tune()) %>%
+  set_engine("ranger") %>%
+  set_mode("classification")
+
+rf_wflow <- workflow() %>%
+  add_recipe(tele_rec) %>%
+  add_model(rf_spec)
+
+rf_grid <- control_grid(save_pred = TRUE, verbose = TRUE)
+
+rf_grid_search <-
+  tune_grid(
+    rf_wflow,
+    resamples = tele_cvs,
+    control = rf_grid
+  )
+
+# rf_grid_search %>% 
+#  show_best(metric = "roc_auc")
+
+# Best RF Metrics
+# mtry = 2
+# trees = 771
+# min_n = 28
+
+rf_mod <- rand_forest(mtry = 2, trees = 771, min_n = 28) %>%
+  set_engine("ranger", importance = "impurity")%>%
+  set_mode("classification")
+
+rf_wflow <- workflow() %>%
+  add_recipe(tele_rec) %>%
+  add_model(rf_mod)
+
+rf_fit <- rf_wflow %>% 
+  fit(tele)
+
+rf_fit %>% 
+  pull_workflow_fit() %>% 
+  vip(num_features = 7,
+      aesthetics = list(color = "black", fill = "indianred")) 
+
+```
+
+\
+Our team hopes these findings will better assist the company in targeting potential customers. Let us know if you have any further questions or concerns regarding our analysis.
+
+
+

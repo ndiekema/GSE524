@@ -1,0 +1,404 @@
+---
+title: 'Lab 7: Logistic Regression & KNN'
+author: "Nathan Diekema"
+date: "11/10/2021"
+output:
+  rmdformats::downcute:
+    lightbox: true
+    self_contained: true
+    gallery: true
+    toc_depth: 3
+    highlight: github
+    df_print: paged #kable
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	fig.align = "center",
+	fig.height = 5,
+	fig.width = 10,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+\
+**Load Libraries & Data**
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(kknn)
+library(ISLR)
+library(DT)
+ha <- read_csv("https://www.dropbox.com/s/aohbr6yb9ifmc8w/heart_attack.csv?dl=1")
+ha
+```
+
+**Data Exploration/Cleaning**
+
+```{r}
+ha <- ha %>% 
+  mutate(
+    sex = as.factor(sex),
+    cp = as.factor(cp),
+    restecg = as.factor(restecg),
+    output = as.factor(output)
+    )
+
+ha %>% 
+  ggplot(aes(x=output, y=trtbps, fill=sex)) + 
+  geom_boxplot() +
+  coord_flip() +
+  labs(x="Diagnosis", y="Resting Blood Pressure", title="Diagnosis vs Resting Blood Pressure") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+ha %>% 
+  ggplot(aes(x=output, y=chol, fill=sex)) + 
+  geom_boxplot() +
+  coord_flip() +
+  labs(x="Diagnosis", y="Cholesterol", title="Diagnosis vs Cholesterol") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+ha %>% 
+  ggplot(aes(x=output, y=thalach, fill=sex)) + 
+  geom_boxplot() +
+  coord_flip() +
+  labs(x="Diagnosis", y="Cholesterol", title="Diagnosis vs Cholesterol") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+ha %>% 
+  ggplot(aes(x=output, y=age, fill=sex)) + 
+  geom_boxplot() +
+  coord_flip() +
+  labs(x="Diagnosis", y="Age", title="Diagnosis vs Cholesterol") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+
+# Part 1: Fitting Models
+
+```{r}
+set.seed(2012)
+ha_split <- initial_split(ha, prop = 0.75)
+
+ha_train <- training(ha_split)
+ha_test <- testing(ha_split)
+
+dim(ha_split)
+
+# For k-fold cross validation
+ha_cvs <- vfold_cv(ha, v = 10)
+
+```
+### **Q1: Finding the best Logistic Model**
+
+**Setting up the model**\
+
+```{r}
+# Logistic Classification Model
+log_model <- logistic_reg() %>%
+  set_mode("classification") %>%
+  set_engine("glm")
+
+log_rec <- recipe(output ~ age + chol + sex + cp + thalach + trtbps, data = ha) %>% 
+  step_dummy(sex) %>% 
+  step_dummy(cp)
+
+log_wflow <- workflow() %>%
+  add_recipe(log_rec) %>%
+  add_model(log_model)
+
+# Fit the model to training data
+log_fit <- fit(log_wflow, data=ha)
+log_fit %>% pull_workflow_fit()
+
+# Confusion Matrix
+data.frame(
+  truth = ha$output,
+  predictions = predict(log_fit, ha)$.pred_class
+) %>%
+  count(truth, predictions) %>% 
+  mutate(truth = ifelse(truth == 0, "True_0", "True_1"),
+         predictions = ifelse(predictions == 0, "Pred_0", "Pred_1")) %>% 
+  pivot_wider(names_from = truth, values_from = n)
+
+ha_pred_log <- ha %>% 
+  select(output) %>% 
+  bind_cols(
+    predict(log_fit, ha),
+    predict(log_fit, ha, type = "prob")
+  ) %>% 
+  rename(truth=output, predicted=.pred_class)
+
+# Cross Validation
+log_wflow %>% 
+  fit_resamples(resamples = ha_cvs) %>% 
+  collect_metrics()
+
+```
+
+
+
+
+### **Q2: Finding the best KNN Model**
+
+**Tuning**\
+
+```{r}
+knn_mod_tune <- nearest_neighbor(neighbors = tune()) %>%
+  set_engine("kknn") %>%
+  set_mode("classification")
+
+k_grid <- grid_regular(neighbors(c(1,100)),
+                       levels = 25)
+
+knn_rec <- recipe(output ~ age + sex + cp + thalach + trtbps, data = ha) %>%
+  step_dummy(sex) %>% 
+  step_dummy(cp) %>% 
+  step_normalize(all_numeric())
+
+knn_wflow <- workflow() %>%
+  add_recipe(knn_rec) %>%
+  add_model(knn_mod_tune)
+
+knn_grid_search <-
+  tune_grid(
+    knn_wflow,
+    resamples = ha_cvs,
+    grid = k_grid
+  )
+
+knn_grid_search %>% 
+  collect_metrics() %>%
+  filter(.metric == "roc_auc") %>%
+  arrange(desc(mean))
+
+knn_grid_search %>% 
+  collect_metrics() %>%
+  filter(.metric == "accuracy") %>%
+  arrange(desc(mean))
+```
+
+From the tuning step we can see that the best value for k (given values from 1-100) is 75. I chose 75 because it performed the best in terms of accuracy and roc_auc (with an emphasis on roc_auc).
+
+**Setting up the model**\
+
+```{r}
+
+# KNN Model
+knn_model <- nearest_neighbor(neighbors = 75) %>%
+  set_mode("classification") %>% 
+  set_engine("kknn")
+
+knn_rec <- recipe(output ~ age + sex + cp + thalach, data = ha) %>%
+  step_dummy(sex) %>% 
+  step_dummy(cp) %>% 
+  step_normalize(all_numeric())
+
+knn_wflow <- workflow() %>%
+  add_recipe(knn_rec) %>%
+  add_model(knn_model)
+
+# Fit the model to training data
+knn_fit <- fit(knn_wflow, data=ha)
+knn_fit %>% pull_workflow_fit()
+
+# Confusion Matrix
+data.frame(
+  truth = ha$output,
+  predictions = predict(knn_fit, ha)$.pred_class
+) %>%
+  count(truth, predictions) %>% 
+  mutate(truth = ifelse(truth == 0, "True_0", "True_1"),
+         predictions = ifelse(predictions == 0, "Pred_0", "Pred_1")) %>% 
+  pivot_wider(names_from = truth, values_from = n)
+
+ha_pred_knn <- ha %>% 
+  select(output) %>% 
+  bind_cols(
+    predict(knn_fit, ha),
+    predict(knn_fit, ha, type = "prob")
+  ) %>% 
+  rename(truth=output, predicted=.pred_class)
+
+# Cross Validation
+knn_wflow %>% 
+  fit_resamples(resamples = ha_cvs) %>% 
+  collect_metrics()
+
+```
+
+### **Q3: Interpretation**
+
+All of the models tested for both the logistic and KNN model:
+
+- output ~  age + sex + cp + thalach + trtbps + restecg + chol
+- output ~  age + sex + cp + thalach + trtbps + chol
+- output ~  age + sex + cp + thalach + trtbps + restecg
+- output ~  age + sex + cp + thalach + trtbps
+- output ~  age + sex + cp + trtbps
+- output ~  age + sex + cp + thalach
+
+The most important predictor for predicting heart attack risk are resting blood pressure, chest pain type, sex, and age. Maximum heart rate achieved during exercise and cholesterol levels of the patient were also important, but to a lesser degree.
+
+
+### **Q4: Plot the ROC Curves**
+
+```{r}
+# Plot the ROC Curves
+
+# Logistic Model
+ha_pred_log %>% 
+  roc_curve(truth = truth, .pred_0) %>% 
+  autoplot()
+
+# KNN Model
+ha_pred_knn %>% 
+  roc_curve(truth = truth, .pred_0) %>% 
+  autoplot()
+```
+
+
+
+# Part 2: Metrics
+
+**Compute metrics for both models**\
+
+```{r}
+
+# Log Model
+log_wflow %>%
+  fit_resamples(ha_cvs,
+                metrics = metric_set(sensitivity, precision, specificity)) %>%
+  collect_metrics()
+
+# KNN Model
+knn_wflow %>%
+  fit_resamples(ha_cvs,
+                metrics = metric_set(sensitivity, precision, specificity)) %>%
+  collect_metrics()
+
+```
+
+
+
+
+# Part 3: Discussion
+
+Suppose you have been hired by a hospital to create classification models for heart attack risk.
+
+The following questions give a possible scenario for why the hospital is interested in these models. For each one, discuss:
+
+- Which metric(s) you would use for model selection and why.
+- Which of your final models (Part One Q1-4) you would recommend to the hospital, and why.
+- What score you should expect for your chosen metric(s) using your chosen model to predict future observations.
+
+### **Q1: The hospital faces severe lawsuits if they deem a patient to be low risk, and that patient later experiences a heart attack.**
+
+Sensitivity/Recall is a good measure for model selection in this scenario because it measures how good the model is at detecting positives. In other words, it measures how good the model will be at detecting all at-risk patients while avoiding missing patients who are at risk. In this situation, it is better to have a highly sensitive model to avoid missing "at-risk" patients even if there is a chance they might not technically be at risk. It's better err on the side of caution.  
+
+Based on both of the models evaluated above, the KNN model performs better in sensitivity while maintaining decent stats in precision and specificity so this is the model I would recommend to this hospital.  
+
+
+Based on the cross validation performed above, we should expect our model to achieve a sensitivity of approximately 0.83.  
+
+### **Q2: The hospital is overfull, and wants to only use bed space for patients most in need of monitoring due to heart attack risk.**
+
+Precision is a good metric for model selection in this scenario because it measures the rate at which positive predictions actually end up being positive. For instance, in this case, a high precision would mean that a vast majority of the patients identified as "at-risk" are actually at-risk. So to achieve a high precision you need to mitigate the number of false positives. That being said, you still need to take the other metrics into account because you still don't want to dismiss patients that are at risk.  
+
+I would recommend the logistic model to this hospital because it performs better in precision while maintaining good stats in the other metrics as well.  
+
+Based on the cross validation performed above, we should expect our model to achieve a precision of approximately 0.79.  
+
+
+### **Q3: The hospital is studying root causes of heart attacks, and would like to understand which biological measures are associated with heart attack risk.**
+
+In this scenario, a hospital is likely comparing the performance of multiple predictive models. For a medical application like this, all of the metrics discussed are important, but the most important are arguably sensitivity and precision. The best model should have a high sensitivity while also maintaining a good precision as both are good indicators of an accurate model that errs on the side of caution.  
+
+It's hard to say which model would be better in this situation, but I would probably recommend the KNN model to this hospital because it performs much better than the KNN model in terms of sensitivity while still maintaining a decent level of precision. This model will be a good indicator of what biological measures typically make a patient "at risk" even if they end up actually not being at risk.  
+
+
+KNN Model:  
+Expected sensitivity: 0.83   
+Expected precision: 0.72   
+
+### **Q4: The hospital is training a new batch of doctors, and they would like to compare the diagnoses of these doctors to the predictions given by the algorithm to measure the ability of new doctors to diagnose patients.**
+
+Similar to Q3 above, for this scenario all of the metrics are helpful. However, for a medical application like this, sensitivity should maybe be emphasized to maximize the number of lives saved and to avoid liability. That being said, precision and specificity should still be taken into account.  
+
+I would recommend the KNN model to this hospital because, as stated earlier, it has a very high sensitivity and a decent precision which is important when diagnosing patients with a life-threatening conditions. Specificity is also important because you don't want to falsely diagnose patients with potentially terminal illnesses HOWEVER it's a better alternative than missing important diagnoses.  
+
+KNN Model:  
+Expected sensitivity: 0.83   
+Expected precision: 0.72   
+
+
+# Part 4: Validation
+
+**Load in validation data**\
+
+```{r}
+ha_validation <- read_csv("https://www.dropbox.com/s/jkwqdiyx6o6oad0/heart_attack_validation.csv?dl=1")
+
+ha_validation <- ha_validation %>% 
+  mutate(
+    sex = as.factor(sex),
+    cp = as.factor(cp),
+    restecg = as.factor(restecg),
+    output = as.factor(output)
+    )
+
+ha_validation
+```
+
+**Get predictions and organize into dataframes**\
+
+```{r}
+# Log
+pred_log_val <- ha_validation %>% 
+  select(output) %>% 
+  bind_cols(
+    predict(log_fit, ha_validation),
+    predict(log_fit, ha_validation, type = "prob")
+  ) %>% 
+  rename(truth=output, predicted=.pred_class)
+
+# KNN
+pred_knn_val <- ha_validation %>% 
+  select(output) %>% 
+  bind_cols(
+    predict(knn_fit, ha_validation),
+    predict(knn_fit, ha_validation, type = "prob")
+  ) %>% 
+  rename(truth=output, predicted=.pred_class)
+```
+
+**Compute metrics**\
+
+```{r}
+# Logistic Model
+roc_auc(pred_log_val, truth = truth,
+           estimate = .pred_0) %>% 
+  rbind(precision(pred_log_val, truth = truth,
+           estimate = predicted)) %>% 
+  rbind(recall(pred_log_val, truth = truth,
+           estimate = predicted))
+
+# KNN Model
+roc_auc(pred_knn_val, truth = truth,
+           estimate = .pred_0) %>% 
+  rbind(precision(pred_knn_val, truth = truth,
+           estimate = predicted)) %>% 
+  rbind(recall(pred_knn_val, truth = truth,
+           estimate = predicted))
+
+```
+
+The values above are the roc_auc, precision, and recall metrics achieved by each of our models when given the validation dataset. They are within the same ballpark as the values we obtained from the cross validation above. But, of course it will tend to vary between different sets of data.  
+
+
+
