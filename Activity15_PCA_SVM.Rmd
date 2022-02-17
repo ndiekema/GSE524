@@ -1,0 +1,188 @@
+---
+title: 'Activity 15: PCA & SVM'
+author: "Nathan Diekema"
+date: "11/18/2021"
+output:
+  rmdformats::downcute:
+    lightbox: true
+    self_contained: true
+    gallery: true
+    toc_depth: 3
+    highlight: github
+    df_print: paged #kable
+    code_folding: hide
+---
+
+**Worked with: Arash Akhavi**
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	fig.align = "center",
+	fig.height = 5,
+	fig.width = 10,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+```{r, include=FALSE}
+library(tidyverse)
+library(tidymodels)
+
+set.seed(98249)
+```
+
+## Data Prep
+
+```{r, echo = FALSE}
+# Read data
+fed <- read.csv("https://www.dropbox.com/s/9t8sxr1sg0monih/federalist.txt?dl=1")
+
+# Data from papers with known authors
+fed_known <- fed %>%
+  select(-1) %>%
+  filter(Author != "DIS")
+
+fed_known
+```
+
+## Try it!
+
+#### Fit a KNN classifier using step_pca.  How does the accuracy compare to when you use all the original predictors?
+
+```{r}
+
+knn_mod <- nearest_neighbor(neighbors = 10) %>%
+  set_mode("classification") %>% 
+  set_engine("kknn")
+
+# Model using PCA
+knn_rec1 <- recipe(Author ~ ., data=fed_known) %>% 
+  step_normalize(all_numeric()) %>% 
+  step_pca(all_numeric())
+
+knn_wflow1 <- workflow() %>% 
+  add_recipe(knn_rec1) %>%
+  add_model(knn_mod)
+
+fed_cvs <- vfold_cv(fed_known, v = 10, strata=Author)
+
+knn_wflow1 %>% 
+  fit_resamples(resamples = fed_cvs) %>% 
+  collect_metrics()
+
+
+```
+
+
+```{r}
+# Model NOT using PCA
+knn_rec2 <- recipe(Author ~ ., data=fed_known) %>% 
+  step_normalize(all_numeric())
+
+knn_wflow2 <- workflow() %>% 
+  add_recipe(knn_rec2) %>%
+  add_model(knn_mod)
+
+knn_wflow2 %>% 
+  fit_resamples(resamples = fed_cvs) %>% 
+  collect_metrics()
+
+```
+
+
+
+## Try it!
+
+#### Fit a support vector classifier, tuning the **cost** parameter
+
+```{r}
+# TUNING
+library(kernlab)
+
+tune_spec <- svm_poly(cost = tune(), degree = 1) %>%
+  set_mode("classification") %>%
+  set_engine("kernlab")
+
+svm_rec <- recipe(Author ~ ., data = fed_known)
+
+svm_wflow <- workflow() %>%
+  add_model(tune_spec) %>%
+  add_recipe(svm_rec)
+
+svm_grid <- control_grid(verbose = TRUE)
+
+knn_grid_search <-
+  tune_grid(
+    svm_wflow,
+    resamples = fed_cvs,
+    ctrl = svm_grid
+  )
+
+knn_grid_search %>% 
+  collect_metrics()
+
+# Build model using best cost value
+# cost = 0.108790967
+
+svm_mod <- svm_poly(cost = 0.025438030, degree = 1) %>%
+  set_mode("classification") %>%
+  set_engine("kernlab")
+
+svm_wflow1 <- workflow() %>%
+  add_model(svm_mod) %>%
+  add_recipe(svm_rec)
+
+svm_fit1 <- fit(svm_wflow1, data=fed_known)
+svm_fit1 %>% pull_workflow_fit()
+
+```
+
+
+
+#### Fit a support vector **machine**, tuning the **cost** parameter AND the **degree** parameter.
+
+```{r}
+
+tune_spec <- svm_poly(cost = tune(), degree = tune()) %>%
+  set_mode("classification") %>%
+  set_engine("kernlab")
+
+svm_rec <- recipe(Author ~ ., data = fed_known)
+
+svm_wflow <- workflow() %>%
+  add_model(tune_spec) %>%
+  add_recipe(svm_rec)
+
+svm_grid <- control_grid(verbose = TRUE)
+
+knn_grid_search <-
+  tune_grid(
+    svm_wflow,
+    resamples = fed_cvs,
+    ctrl = svm_grid
+  )
+
+knn_grid_search %>% 
+  collect_metrics()
+
+
+# Build model using best cost & degree value
+# cost = 0.010135515; degree = 1
+
+svm_mod <- svm_poly(cost = 0.010135515, degree = 1) %>%
+  set_mode("classification") %>%
+  set_engine("kernlab")
+
+svm_wflow2 <- workflow() %>%
+  add_model(svm_mod) %>%
+  add_recipe(svm_rec)
+
+svm_fit2 <- fit(svm_wflow2, data=fed_known)
+svm_fit2 %>% pull_workflow_fit()
+
+
+```
+
+

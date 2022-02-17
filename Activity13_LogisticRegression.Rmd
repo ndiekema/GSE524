@@ -1,0 +1,328 @@
+---
+title: 'Activity 13: Logistic Regression'
+author: "Nathan Diekema"
+date: "11/9/2021"
+output:
+  rmdformats::downcute:
+    lightbox: true
+    self_contained: true
+    gallery: true
+    toc_depth: 3
+    highlight: github
+    df_print: paged #kable
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	fig.align = "center",
+	fig.height = 5,
+	fig.width = 10,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+\
+**Load Libraries & Data**
+
+```{r}
+library(tidyverse)
+library(tidymodels)
+library(ISLR)
+library(DT)
+Auto
+```
+
+# Problem 1
+
+### **1. Create a binary variable, mpg01, that contains a 1 if mpg contains a value above its median, and a 0 if mpg contains a value below its median**
+
+```{r}
+median_mpg <- median(Auto$mpg)
+median_mpg
+
+Auto <- Auto %>% 
+  drop_na(mpg) %>% 
+  mutate(mpg01 = as.factor(ifelse(mpg > median_mpg, 1, 0)))
+
+```
+
+
+### **2. Explore the data graphically in order to investigate the association between mpg01 and the other features.**
+
+
+```{r}
+# mpg01 vs horsepower
+Auto %>% 
+  ggplot(aes(x=mpg01, y=horsepower, fill=mpg01)) + 
+  geom_boxplot() +
+  coord_flip() +
+  labs(title="Horsepower of cars above & below the median mpg") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# mpg01 vs weight
+Auto %>% 
+  ggplot(aes(x=mpg01, y=weight, fill=mpg01)) + 
+  geom_boxplot() +
+  coord_flip() +
+  labs(title="Weight of cars above & below the median mpg") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# mpg01 vs acceleration
+Auto %>% 
+  ggplot(aes(x=mpg01, y=acceleration, fill=mpg01)) + 
+  geom_boxplot() +
+  coord_flip() +
+  labs(title="Acceleration of cars above & below the median mpg") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# mpg01 vs year
+Auto %>% 
+  ggplot(aes(x=mpg01, y=year, fill=mpg01)) + 
+  geom_boxplot() + 
+  coord_flip() +
+  labs(title="Year of cars above & below the median mpg") +
+  theme(plot.title = element_text(hjust = 0.5))
+  
+# mpg01 vs displacement
+Auto %>% 
+  ggplot(aes(x=mpg01, y=displacement, fill=mpg01)) + 
+  geom_boxplot() + 
+  coord_flip() +
+  labs(title="Displacement of cars above & below the median mpg") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+# mpg01 vs displacement
+Auto %>% 
+  ggplot(aes(x=mpg01, y=cylinders, fill=mpg01)) + 
+  geom_violin() + 
+  coord_flip() +
+  labs(title="Cylinders of cars above & below the median mpg") +
+  theme(plot.title = element_text(hjust = 0.5))
+
+```
+
+
+
+
+### **3. Split the data into a training set and a test set.**
+
+```{r}
+# Train test split
+# set.seed(48378)
+
+auto_split <- initial_split(Auto, prop = 0.8)
+
+auto_train <- training(auto_split)
+auto_test <- testing(auto_split)
+
+dim(auto_split)
+```
+
+
+
+### **4. Perform logistic regression on the training data in order to predict mpg01 using the variables that seemed most associated with mpg01 in (2). What is the test error of the model obtained? Produce a confusion matrix as well.**
+
+```{r}
+log_model <- logistic_reg() %>%
+  set_mode("classification") %>%
+  set_engine("glm")
+
+# auto_rec <- recipe(mpg01 ~ horsepower + weight + displacement, data = Auto)
+# 
+# auto_wflow <- workflow() %>% 
+#   add_model(log_model) %>% 
+#   add_recipe(auto_rec)
+# 
+# m1_fit <- auto_wflow %>% 
+#   fit(auto_train)
+
+m1_fit <- log_model %>%
+          fit(mpg01 ~ horsepower + weight + displacement, data = auto_train)
+
+compare <- data.frame(
+  truth = auto_test$mpg01,
+  predictions = predict(m1_fit, auto_test)$.pred_class
+)
+
+compare %>%
+  count(truth, predictions) %>% 
+  mutate(truth = ifelse(truth == 0, "True_0", "True_1"),
+         predictions = ifelse(predictions == 0, "Pred_0", "Pred_1")) %>% 
+  pivot_wider(names_from = truth, values_from = n)
+
+acc1 <- compare %>%  
+  accuracy(truth=truth,
+           estimate=predictions) %>% 
+  .$.estimate
+acc1
+```
+
+
+### **5. If you were unsure about the variables you chose to include for (4), fit two more models with different sets of variables. Perform cross-validation all three of these models and compare their test error estimates. Which one was best? How clear was it? Does this make sense?**
+
+```{r}
+
+# Model 2
+m2_fit <- log_model %>% 
+          fit(mpg01 ~ horsepower + weight + displacement + year + acceleration, data = auto_train)
+
+compare <- data.frame(
+  truth = auto_test$mpg01,
+  predictions = predict(m2_fit, auto_test)$.pred_class
+)
+
+acc2 <- compare %>% 
+  accuracy(truth=truth,
+           estimate=predictions) %>% 
+  .$.estimate
+
+# Model 3
+m3_fit <- log_model %>% 
+          fit(mpg01 ~ horsepower + weight + displacement + cylinders, data = auto_train)
+
+compare <- data.frame(
+  truth = auto_test$mpg01,
+  predictions = predict(m3_fit, auto_test)$.pred_class
+)
+
+acc3 <- compare %>% 
+  accuracy(truth=truth,
+           estimate=predictions) %>% 
+  .$.estimate
+
+results <- data.frame(
+  accuracy = c(acc1,acc2,acc3)
+)
+rownames(results) <- c("Model1", "Model2", "Model3")
+
+results
+```
+
+\
+Our first model performed the best out of all the models tested. Our first model consisted of the three variables that had the largest differences between high and low mileage: horsepower, weight, and displacement. The other models still performed well, with the third model being very close to the accuracy of our first model.
+\
+
+
+### **6. How do your results and model comparisons change if you change the probability threshold? That is, if you changed the probability used to predict if a car has high gas mileage do your results change noticeably**
+\
+**Threshold = 0.5**
+\
+```{r}
+thresh <- 0.5
+
+# Predictions
+compare <- data.frame(
+  truth = auto_test$mpg01,
+  pred1 = as.factor(
+    ifelse(predict(m1_fit, auto_test, type="prob")$.pred_1 >= thresh, 1, 0)),
+  pred2 = as.factor(
+    ifelse(predict(m2_fit, auto_test, type="prob")$.pred_1 >= thresh, 1, 0)),
+  pred3 = as.factor(
+    ifelse(predict(m3_fit, auto_test, type="prob")$.pred_1 >= thresh, 1, 0))
+) 
+
+# Accuracy
+acc1 <- compare %>% 
+  accuracy(truth=truth, estimate=pred1) %>% 
+  .$.estimate
+
+acc2 <- compare %>% 
+  accuracy(truth=truth, estimate=pred2) %>% 
+  .$.estimate
+
+acc3 <- compare %>% 
+  accuracy(truth=truth, estimate=pred3) %>% 
+  .$.estimate
+
+# Results
+results <- data.frame(
+  accuracy = c(acc1, acc2, acc3)
+)
+rownames(results) <- c("Model1", "Model2", "Model3")
+
+results
+```
+\
+**Threshold = 0.7**
+\
+```{r}
+thresh <- 0.7
+
+# Predictions
+compare <- data.frame(
+  truth = auto_test$mpg01,
+  pred1 = as.factor(
+    ifelse(predict(m1_fit, auto_test, type="prob")$.pred_1 >= thresh, 1, 0)),
+  pred2 = as.factor(
+    ifelse(predict(m2_fit, auto_test, type="prob")$.pred_1 >= thresh, 1, 0)),
+  pred3 = as.factor(
+    ifelse(predict(m3_fit, auto_test, type="prob")$.pred_1 >= thresh, 1, 0))
+) 
+
+# Accuracy
+acc1 <- compare %>% 
+  accuracy(truth=truth, estimate=pred1) %>% 
+  .$.estimate
+
+acc2 <- compare %>% 
+  accuracy(truth=truth, estimate=pred2) %>% 
+  .$.estimate
+
+acc3 <- compare %>% 
+  accuracy(truth=truth, estimate=pred3) %>% 
+  .$.estimate
+
+# Results
+results <- data.frame(
+  accuracy = c(acc1, acc2, acc3)
+)
+rownames(results) <- c("Model1", "Model2", "Model3")
+
+results
+
+```
+\
+**Threshold = 0.85**
+\
+```{r}
+thresh <- 0.85
+
+# Predictions
+compare <- data.frame(
+  truth = auto_test$mpg01,
+  pred1 = as.factor(
+    ifelse(predict(m1_fit, auto_test, type="prob")$.pred_1 >= thresh, 1, 0)),
+  pred2 = as.factor(
+    ifelse(predict(m2_fit, auto_test, type="prob")$.pred_1 >= thresh, 1, 0)),
+  pred3 = as.factor(
+    ifelse(predict(m3_fit, auto_test, type="prob")$.pred_1 >= thresh, 1, 0))
+) 
+
+# Accuracy
+acc1 <- compare %>% 
+  accuracy(truth=truth, estimate=pred1) %>% 
+  .$.estimate
+
+acc2 <- compare %>% 
+  accuracy(truth=truth, estimate=pred2) %>% 
+  .$.estimate
+
+acc3 <- compare %>% 
+  accuracy(truth=truth, estimate=pred3) %>% 
+  .$.estimate
+
+# Results
+results <- data.frame(
+  accuracy = c(acc1, acc2, acc3)
+)
+rownames(results) <- c("Model1", "Model2", "Model3")
+
+results
+```
+
+From the results attained by adjusting the threshold to two different values (0.7 and 0.85), every model still performs best when the threshold is at 0.5. Some models performed better than others at higher thresholds so it is clearly dependent on the explanatory variables used. I'm sure with some patience we could find the perfect value to improve the accuracy of Model 1 but none of the values tested seem to hit that mark.
+
+

@@ -1,0 +1,366 @@
+---
+title: 'Activity 14: Classification'
+author: "Nathan Diekema"
+date: "11/16/2021"
+output:
+  rmdformats::downcute:
+    lightbox: true
+    self_contained: true
+    gallery: true
+    toc_depth: 3
+    highlight: github
+    df_print: paged #kable
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	fig.align = "center",
+	fig.height = 5,
+	fig.width = 10,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+
+```{r, include=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(kknn)
+library(glmnet)
+library(discrim)
+```
+
+
+# LDA
+
+
+```{r, message = FALSE}
+ins <- read_csv("https://www.dropbox.com/s/bocjjyo1ehr5auz/insurance.csv?dl=1")
+
+ins <- ins %>%
+  mutate(
+    smoker = factor(smoker)
+  ) %>%
+  drop_na()
+```
+
+
+```{r set_mod}
+lda_mod <- discrim_linear() %>%
+  set_engine("MASS") %>%
+  set_mode("classification")
+```
+
+
+```{r}
+lda_fit_1 <- lda_mod %>%
+  fit(smoker ~ charges, data = ins)
+
+lda_fit_1$fit %>% summary()
+```
+
+
+```{r}
+lda_fit_1 
+```
+
+
+```{r}
+preds <- lda_fit_1 %>% predict(ins)
+
+ins <- ins %>%
+  mutate(
+    pred_smoker = preds$.pred_class
+  )
+
+ins %>%
+  accuracy(truth = smoker,
+           estimate = pred_smoker)
+```
+
+
+```{r}
+lda_fit_2 <- lda_mod %>%
+  fit(smoker ~ charges + age, data = ins)
+
+lda_fit_2
+```
+
+
+```{r}
+lda_fit_2$fit$scaling
+```
+
+```{r, echo = FALSE}
+ins %>%
+  ggplot(aes(x = charges, y = age, color = smoker)) +
+  geom_point()
+```
+
+```{r}
+lda_fit_2
+
+my_slope = lda_fit_2$fit$scaling[1]/(-1*lda_fit_2$fit$scaling[2])
+```
+
+
+```{r, echo = FALSE}
+
+ins %>%
+  ggplot(aes(x = charges, y = age, color = smoker)) +
+  geom_point() +
+  geom_abline(aes(slope = my_slope, intercept = 0))
+
+```
+
+#### Your turn:
+
+Find the best LDA model to predict smoker status.
+
+How does it compare to the Logistic Regression and KNN approaches?
+
+**LDA**
+
+```{r}
+ins_cvs <- vfold_cv(ins, v = 10)
+
+lda_rec1 <- recipe(smoker ~ charges + sex + age + bmi + region, data = ins)
+
+lda_rec2 <- recipe(smoker ~ charges + age + bmi, data = ins)
+
+lda_rec3 <- recipe(smoker ~ charges + age + region, data = ins)
+
+lda_wflow1 <- workflow() %>% 
+  add_recipe(lda_rec1) %>%
+  add_model(lda_mod)
+
+lda_wflow2 <- workflow() %>% 
+  add_recipe(lda_rec2) %>%
+  add_model(lda_mod)
+
+lda_wflow3 <- workflow() %>% 
+  add_recipe(lda_rec3) %>%
+  add_model(lda_mod)
+
+metrics = metric_set(accuracy)
+
+lda_compare <- data.frame(lda_wflow1 %>% 
+  fit_resamples(resamples = ins_cvs, metrics=metrics) %>% 
+  collect_metrics())
+
+lda_compare <- rbind(lda_compare, lda_wflow2 %>% 
+  fit_resamples(resamples = ins_cvs, metrics=metrics) %>% 
+  collect_metrics())
+
+lda_compare <- rbind(lda_compare, lda_wflow3 %>% 
+  fit_resamples(resamples = ins_cvs, metrics=metrics) %>% 
+  collect_metrics())
+
+rownames(lda_compare) <- c("LDA_1", "LDA_2", "LDA_3")
+
+lda_compare <- lda_compare %>% dplyr::select(.metric, mean)
+
+
+```
+
+**KNN**
+
+```{r}
+knn_mod <- nearest_neighbor(neighbors = 10) %>%
+  set_mode("classification") %>% 
+  set_engine("kknn")
+
+knn_rec1 <- recipe(smoker ~ charges + sex + age + bmi + region, data = ins)
+
+knn_rec2 <- recipe(smoker ~ charges + age + bmi, data = ins)
+
+knn_rec3 <- recipe(smoker ~ charges + age + region, data = ins)
+
+knn_wflow1 <- workflow() %>% 
+  add_recipe(knn_rec1) %>%
+  add_model(knn_mod)
+
+knn_wflow2 <- workflow() %>% 
+  add_recipe(knn_rec2) %>%
+  add_model(knn_mod)
+
+knn_wflow3 <- workflow() %>% 
+  add_recipe(knn_rec3) %>%
+  add_model(knn_mod)
+
+knn_compare <- data.frame(knn_wflow1 %>% 
+  fit_resamples(resamples = ins_cvs, metrics=metrics) %>% 
+  collect_metrics())
+
+knn_compare <- rbind(knn_compare, knn_wflow2 %>% 
+  fit_resamples(resamples = ins_cvs, metrics=metrics) %>% 
+  collect_metrics())
+
+knn_compare <- rbind(knn_compare, knn_wflow3 %>% 
+  fit_resamples(resamples = ins_cvs, metrics=metrics) %>% 
+  collect_metrics())
+
+rownames(knn_compare) <- c("KNN_1", "KNN_2", "KNN_3")
+
+knn_compare <- knn_compare %>% dplyr::select(.metric, mean)
+knn_compare
+```
+
+
+**Logistic**
+
+```{r}
+log_mod <- logistic_reg() %>%
+  set_mode("classification") %>%
+  set_engine("glm")
+
+log_rec1 <- recipe(smoker ~ charges + sex + age + bmi + region, data = ins)
+
+log_rec2 <- recipe(smoker ~ charges + age + bmi, data = ins)
+
+log_rec3 <- recipe(smoker ~ charges + age + region, data = ins)
+
+log_wflow1 <- workflow() %>% 
+  add_recipe(log_rec1) %>%
+  add_model(log_mod)
+
+log_wflow2 <- workflow() %>% 
+  add_recipe(log_rec2) %>%
+  add_model(log_mod)
+
+log_wflow3 <- workflow() %>% 
+  add_recipe(log_rec3) %>%
+  add_model(log_mod)
+
+log_compare <- data.frame(log_wflow1 %>% 
+  fit_resamples(resamples = ins_cvs, metrics=metrics) %>% 
+  collect_metrics())
+
+log_compare <- rbind(log_compare, log_wflow2 %>% 
+  fit_resamples(resamples = ins_cvs, metrics=metrics) %>% 
+  collect_metrics())
+
+log_compare <- rbind(log_compare, log_wflow3 %>% 
+  fit_resamples(resamples = ins_cvs, metrics=metrics) %>% 
+  collect_metrics())
+
+rownames(log_compare) <- c("Log_1", "Log_2", "Log_3")
+
+log_compare <- log_compare %>% dplyr::select(.metric, mean)
+log_compare
+```
+
+```{r}
+# Compiled list comparing all models
+rbind(lda_compare, rbind(knn_compare, log_compare)) %>% 
+  arrange(desc(mean))
+```
+
+Our log model with the formula [smoker ~ charges + age + bmi] performed the best out of all the models tested. 
+
+
+
+# Quadratic Discriminant Analysis
+
+#### Code from lecture:
+
+```{r qda_mod}
+qda_mod <- discrim_regularized(frac_common_cov = 0) %>% 
+             set_engine('klaR') %>% 
+             set_mode('classification')
+```
+
+```{r, echo = FALSE}
+dat <- tibble(
+  A = rnorm(100, 10, 5),
+  B = rnorm(100, 15, 1)
+) %>%
+  pivot_longer(everything(),
+               values_to = "val",
+               names_to = "Class")
+
+ggplot(dat, aes(x = val, fill = Class)) +
+  geom_density(alpha = 0.5) +
+  geom_vline(xintercept = 11)
+```
+
+
+```{r, echo = FALSE}
+dat <- tibble(
+  V1 = c(rnorm(100, 10, 5), rnorm(100, 37, 18)),
+  V2 = c(rnorm(100, 15, 1), rnorm(100, 30, 9)),
+  Class = factor(c(rep("A", 100), rep("B", 100)))
+) 
+
+dat %>%
+  ggplot(aes(x = V1, y = V2, col = Class)) +
+  geom_point()
+```
+
+
+```{r, echo = FALSE}
+qda_wflow <- workflow() %>%
+  add_recipe(recipe(Class ~ V1 + V2, data = dat)) %>%
+  add_model(qda_mod) %>%
+  fit(dat)
+
+# qda_wflow %>%
+#   horus::viz_decision_boundary(dat)
+```
+
+#### Your turn:
+
+Find the best QDA model to predict smoker status.
+
+How does it compare to the LDA, Logistic Regression, and KNN approaches?
+
+```{r}
+
+qda_rec1 <- recipe(smoker ~ charges + sex + age + bmi + region, data = ins)
+
+qda_rec2 <- recipe(smoker ~ charges + age + bmi, data = ins)
+
+qda_rec3 <- recipe(smoker ~ charges + age + region, data = ins)
+
+qda_wflow1 <- workflow() %>% 
+  add_recipe(qda_rec1) %>%
+  add_model(qda_mod)
+
+qda_wflow2 <- workflow() %>% 
+  add_recipe(qda_rec2) %>%
+  add_model(qda_mod)
+
+qda_wflow3 <- workflow() %>% 
+  add_recipe(qda_rec3) %>%
+  add_model(qda_mod)
+
+qda_compare <- data.frame(qda_wflow1 %>% 
+  fit_resamples(resamples = ins_cvs, metrics=metrics) %>% 
+  collect_metrics())
+
+qda_compare <- rbind(qda_compare, qda_wflow2 %>% 
+  fit_resamples(resamples = ins_cvs, metrics=metrics) %>% 
+  collect_metrics())
+
+qda_compare <- rbind(qda_compare, qda_wflow3 %>% 
+  fit_resamples(resamples = ins_cvs, metrics=metrics) %>% 
+  collect_metrics())
+
+rownames(qda_compare) <- c("QDA_1", "QDA_2", "QDA_3")
+
+qda_compare <- qda_compare %>% dplyr::select(.metric, mean)
+qda_compare
+```
+
+
+```{r}
+# Compiled list comparing all models
+rbind(lda_compare, rbind(knn_compare, rbind(log_compare, qda_compare))) %>% 
+  arrange(desc(mean))
+```
+
+When comparing the accuracy of all the models, the second logistic model and QDA model are the best with an accuracy of 96.98%. This being said, accuracy is not the best metric for comparison because the dataset is unbalanced so there is a high chance that the QDA model has a better sensitivit & Specificity.
+

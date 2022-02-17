@@ -1,0 +1,192 @@
+---
+title: 'Activity 16: Random Forests'
+author: "Nathan Diekema"
+date: "11/30/2021"
+output:
+  rmdformats::downcute:
+    lightbox: true
+    self_contained: true
+    gallery: true
+    toc_depth: 3
+    highlight: github
+    df_print: paged #kable
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	fig.align = "center",
+	fig.height = 5,
+	fig.width = 10,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+
+```{r include=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(kernlab)
+library(discrim)
+library(glmnet)
+library(ISLR)
+library(rpart.plot)
+library(vip) 
+options(scipen = 999)
+set.seed(1984)
+```
+
+# Problem 1
+
+```{r}
+carseats_cvs <- vfold_cv(Carseats, v = 5)
+```
+
+**1. Fit a single decision tree to the entire dataset. Report the cross-validated metrics.**
+
+```{r}
+carseats_rec <- recipe(Sales ~ ., data = Carseats)
+
+tree_mod <- decision_tree() %>%
+  set_engine("rpart") %>%
+  set_mode("regression")
+
+tree_wflow <- workflow() %>%
+  add_recipe(carseats_rec) %>%
+  add_model(tree_mod)
+
+tree_wflow %>% 
+  fit_resamples(resamples = carseats_cvs) %>% 
+  collect_metrics()
+```
+
+
+**2. Now, tune your decision tree according to cost_complexity, tree_depth, and min_n to identify the best decision tree model. Report the cross-validated metrics. Plot the final tree and interpret the results.**
+
+
+```{r}
+# Tuning
+tree_mod <- decision_tree(cost_complexity = tune(),
+                          tree_depth = tune(),
+                          min_n = tune()) %>%
+  set_engine("rpart") %>%
+  set_mode("regression")
+
+tree_wflow <- workflow() %>%
+  add_recipe(carseats_rec) %>%
+  add_model(tree_mod)
+
+tree_grid <- grid_regular(cost_complexity(),
+                          tree_depth(),
+                          min_n(), 
+                          levels = 2)
+
+tree_grid_search <- tune_grid(tree_wflow,
+                              resamples = carseats_cvs,
+                              grid = tree_grid)
+
+
+tuning_metrics <- tree_grid_search %>% collect_metrics()
+
+tuning_metrics %>%
+  filter(.metric == "rmse") %>%
+  arrange(mean)
+
+tuning_metrics %>%
+  filter(.metric == "rsq") %>%
+  arrange(desc(mean))
+```
+
+```{r}
+# Best tuned decision tree metrics:
+#   cost_complexity = 0.0000000001
+#   tree_depth = 15
+#   min_n = 40
+
+tree_mod <- decision_tree(cost_complexity = 0.0000000001,
+                          tree_depth = 15,
+                          min_n = 40) %>%
+  set_engine("rpart") %>%
+  set_mode("regression")
+
+tree_wflow <- workflow() %>%
+  add_recipe(carseats_rec) %>%
+  add_model(tree_mod) %>% 
+  fit(Carseats)
+
+tree_wflow %>% 
+  fit_resamples(resamples = carseats_cvs) %>% 
+  collect_metrics()
+
+tree_fit <- tree_wflow %>% 
+  pull_workflow_fit()
+
+rpart.plot(tree_fit$fit)
+```
+
+
+**3. Determine the best random forest model for these data and report the cross-validated metrics. Is this model better or worse then the single decision tree?**
+
+```{r}
+rf_spec <- rand_forest(mtry = tune(), trees = tune(), min_n = tune()) %>%
+  set_engine("ranger") %>%
+  set_mode("regression")
+
+rf_wflow <- workflow() %>%
+  add_recipe(carseats_rec) %>%
+  add_model(rf_spec)
+
+rf_grid <- control_grid(verbose = TRUE)
+
+rf_grid_search <- tune_grid(
+    rf_wflow,
+    resamples = carseats_cvs,
+    ctrl = rf_grid
+  )
+
+rf_grid_search %>% show_best(metric = "rsq")
+
+# Best tuned random forest metrics:
+#   mtry: 5
+#   trees: 1512
+#   min_n: 5
+
+
+rf_mod <- rand_forest(mtry = 5, trees = 1512, min_n = 5) %>%
+  set_engine("ranger", importance = "impurity")%>%
+  set_mode("regression")
+
+rf_wflow <- workflow() %>%
+  add_recipe(carseats_rec) %>%
+  add_model(rf_mod)
+
+rf_fit <- rf_wflow %>% 
+  fit(Carseats)
+
+rf_fit %>% pull_workflow_fit()
+rf_fit %>% extract_fit_parsnip()
+
+```
+
+The random forest model performed far better than the single decision tree model. It had a better Rsq value of 0.69 vs the decision tree's Rsq of 0.45.
+
+
+**4. Install the vip package. Even though random forests can be harder to interpret, we can still get variable importance scores out of the model results. Use the vip package to display variable importance scores for your final random forest model from (3). Do these scores align with your interpretations from (2) of the single decision tree.**
+
+```{r}
+
+rf_fit %>% 
+  pull_workflow_fit() %>% 
+  vip(num_features = 20)
+
+```
+
+
+**5. Explain what these variable importance scores represent as if you’re describing them to someone who is new to random forests.**
+
+The importance chart above represents the most important factors in determining the sales of car seats. The most important factors in this case were Price and Shelf location and the least important factors were urban and US. This essentially means that these factors have the most influence on the sales of car seats than the other factors used.
+
+
+

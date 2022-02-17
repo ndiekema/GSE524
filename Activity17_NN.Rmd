@@ -1,0 +1,128 @@
+---
+title: 'Activity 17: Neural Networks'
+author: "Nathan Diekema"
+date: "12/4/2021"
+output:
+  rmdformats::downcute:
+    lightbox: true
+    self_contained: true
+    gallery: true
+    toc_depth: 3
+    highlight: github
+    df_print: paged #kable
+    code_folding: show
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+	echo = TRUE,
+	fig.align = "center",
+	fig.height = 5,
+	fig.width = 10,
+	message = FALSE,
+	warning = FALSE
+)
+```
+
+```{r include=FALSE}
+library(tidyverse)
+library(tidymodels)
+library(kernlab)
+library(ISLR)
+library(rpart.plot)
+library(vip) 
+options(scipen = 999)
+set.seed(1984)
+```
+
+# Problem 1
+
+```{r}
+carseats_cvs <- vfold_cv(Carseats, v = 5)
+Carseats
+```
+
+### **1. Fit a neural network to the entire dataset. Report the cross-validated metrics.**
+
+```{r}
+carseats_rec <- recipe(Sales ~ ., data = Carseats) %>% 
+  step_dummy(Urban, US, ShelveLoc) %>% 
+  step_normalize(all_predictors())
+
+nn_mod <- mlp(
+  hidden_units = 12,
+  penalty = .01,
+  epochs = 100,
+  activation = "linear"
+) %>%
+  set_engine("nnet") %>%
+  set_mode("regression")
+
+nn_wflow <- workflow() %>%
+  add_recipe(carseats_rec) %>%
+  add_model(nn_mod)
+
+nn_wflow %>%
+  fit_resamples(resamples = carseats_cvs) %>% 
+  collect_metrics()
+```
+
+### **2. Now, tune your neural network according to hidden_units and penalty to identify the best neural network model. Report the cross-validated metrics. Remember to consider the size of your dataset when specifying your model(s).**
+
+```{r}
+tune_spec <- mlp(
+  hidden_units = tune(),
+  penalty = tune(),
+  epochs = 100,
+  activation = "linear"
+) %>%
+  set_engine("nnet") %>%
+  set_mode("regression")
+
+nn_wflow <- workflow() %>%
+  add_recipe(carseats_rec) %>%
+  add_model(tune_spec)
+
+nn_grid <- control_grid(verbose = TRUE, save_pred = TRUE)
+
+nn_grid_search <-
+  tune_grid(
+    nn_wflow,
+    resamples = carseats_cvs,
+    ctrl = nn_grid
+  )
+
+nn_grid_search %>%
+  show_best(metric = "rsq")
+
+# Best NN metrics:
+#   hidden_units: 2
+#   penalty: 0.000000074930161
+
+nn_mod <- mlp(
+  hidden_units = 2,
+  penalty = 0.000000074930161,
+  epochs = 100,
+  activation = "linear"
+) %>%
+  set_engine("nnet") %>%
+  set_mode("regression")
+
+nn_wflow <- workflow() %>%
+  add_recipe(carseats_rec) %>%
+  add_model(nn_mod)
+
+nn_wflow %>%
+  fit_resamples(resamples = carseats_cvs) %>% 
+  collect_metrics()
+
+```
+
+### **3. Are more hidden units necessarily better?**
+
+No, more hidden units are not necessarily better. It depends on a lot of factors and there's no correlation between number of hidden layers and performance. It depends on the situation, the data set, and the model you're trying to fit. As you can see from the tuning step above, the optimal number of hidden layers was 2, which proves that more layers is not always better.
+
+### **4. How do these results compare to your previous results using decision trees and random forests?**
+
+The neural network model performed considerably better than both the random forest and decision trees models. Our NN model acheived a Rsq value of 0.83 wheras the random forest and decision trees in the previous activity only achieved an Rsq of 0.69 and 0.46, respectively.
+
